@@ -1,0 +1,36 @@
+syntax = "proto3";
+
+option java_package = "org.ciscoadiz.user.grpc";
+option java_outer_classname = "UserProto";
+option java_multiple_files = true;
+
+package user;
+
+service UserService {
+  rpc ValidateCredentials (ValidateCredentialsRequest) returns (ValidateCredentialsResponse);
+  rpc GetUserById (GetUserByIdRequest) returns (GetUserResponse);
+}
+
+message ValidateCredentialsRequest {
+  string email = 1;
+  string password = 2;
+}
+
+message ValidateCredentialsResponse {
+  bool valid = 1;
+  int64 userId = 2;
+  string email = 3;
+  string status = 4;
+}
+
+message GetUserByIdRequest {
+  int64 userId = 1;
+}
+
+message GetUserResponse {
+  int64 id = 1;
+  string email = 2;
+  string name = 3;
+  string surname = 4;
+  string status = 5;
+}
