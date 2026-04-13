@@ -497,12 +497,34 @@ quarkus.rest-client.storage-service.url=${STORAGE_SERVICE_URL:http://localhost:8
 - `quarkus-smallrye-jwt` (validación JWT centralizada)
 - `quarkus-container-image-jib`
 
-**Estado**: scaffold creado, sin implementación todavía.
+**Estructura**:
+```
+filter/JwtAuthFilter.java       ← intercepta todas las peticiones
+proxy/ProxyService.java         ← resuelve destino y hace proxy con Vert.x WebClient
+resource/GatewayResource.java   ← GET/POST/PUT/DELETE en /api/{path:.+}
+config/WebClientConfig.java     ← produce WebClient singleton
+```
 
-**Objetivo**: único punto de entrada para los clientes externos. Responsabilidades previstas:
-- Enrutar peticiones a los servicios internos (user, auth, cat, storage)
-- Validar JWT de forma centralizada (evitar que cada servicio lo haga)
-- Propagar el userId a los servicios downstream via header
+**Enrutado por prefijo**:
+- `/api/auth/**` → auth-service (8082)
+- `/api/users/**` → user-service (8081)
+- `/api/cats/**` → cat-service (8084)
+- `/api/storage/**` → storage-service (8083)
+
+La ruta interna se reescribe eliminando el prefijo `/api`: `/api/cats/1` → `/cats/1`.
+
+**Rutas públicas** (sin token requerido):
+- `POST /api/auth/login`
+- `POST /api/auth/refresh`
+- `POST /api/users` (registro)
+- `GET /api/cats` y `GET /api/cats/{id}`
+
+**Notas importantes**:
+- El proxy propaga `Authorization` y `Content-Type` al servicio destino
+- `JwtAuthFilter` usa `@ServerRequestFilter` de RESTEasy Reactive (devuelve `Uni<Response>`)
+- `ProxyService` usa `Vert.x WebClient` (no los REST clients de Quarkus) para poder hacer
+  proxy genérico sin definir cada endpoint individualmente
+- **Pendiente**: soporte multipart para `POST /api/cats/{id}/images` (upload de imágenes)
 
 ---
 
@@ -545,6 +567,9 @@ mp.jwt.verify.publickey.location=publicKey.pem
 El proyecto tiene control de versiones Git con historial atómico que refleja el orden de desarrollo:
 
 ```
+feat(gateway-service): reverse proxy implementation
+feat(gateway-service): Vert.x WebClient config
+feat(gateway-service): JWT auth filter + routing config
 chore(gateway-service): scaffold
 docs: add BITACORA.md with full project context
 feat(security): JWT authentication
@@ -628,7 +653,7 @@ user-service      ✅
 auth-service      ✅
 storage-service   ✅
 cat-service       ✅
-gateway-service   🚧 (scaffold creado, sin implementación)
+gateway-service   ✅ (proxy + JWT filter, pendiente soporte multipart)
 ban-service       📋 (baneo temporal/permanente, desbaneo via @Scheduled)
 adoption-service  📋 (proceso adopción, historial, reportes)
 ```
