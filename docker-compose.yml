@@ -1,0 +1,28 @@
+services:
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: kittigram
+      POSTGRES_PASSWORD: kittigram
+      POSTGRES_DB: kittigram
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+  minio:
+    image: minio/minio:latest
+    command: server /data --address ":9000" --console-address ":9001"
+
+    environment:
+      MINIO_ROOT_USER: kittigram
+      MINIO_ROOT_PASSWORD: kittigram123
+      MINIO_DEFAULT_BUCKETS: kittigram
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    volumes:
+      - minio_data:/data
+volumes:
+  postgres_data:
+  minio_data:
