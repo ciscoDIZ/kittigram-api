@@ -21,6 +21,7 @@ Kittigram es un portal donde los usuarios pueden subir perfiles de gatos para ad
 ### Mapa de puertos
 ```
 5432  → PostgreSQL
+8080  → gateway-service HTTP  ← punto de entrada público
 8081  → user-service HTTP
 8082  → auth-service HTTP
 8083  → storage-service HTTP
@@ -73,6 +74,7 @@ kittigram/
     <module>auth-service</module>
     <module>storage-service</module>
     <module>cat-service</module>
+    <module>gateway-service</module>
 </modules>
 ```
 
@@ -485,6 +487,25 @@ quarkus.rest-client.storage-service.url=${STORAGE_SERVICE_URL:http://localhost:8
 
 ---
 
+### gateway-service
+**Puerto**: 8080 (punto de entrada público)
+**Sin BD**
+
+**Dependencias**:
+- `quarkus-rest`
+- `quarkus-rest-client-jackson`
+- `quarkus-smallrye-jwt` (validación JWT centralizada)
+- `quarkus-container-image-jib`
+
+**Estado**: scaffold creado, sin implementación todavía.
+
+**Objetivo**: único punto de entrada para los clientes externos. Responsabilidades previstas:
+- Enrutar peticiones a los servicios internos (user, auth, cat, storage)
+- Validar JWT de forma centralizada (evitar que cada servicio lo haga)
+- Propagar el userId a los servicios downstream via header
+
+---
+
 ## Seguridad JWT
 
 ### Claves RSA
@@ -524,6 +545,8 @@ mp.jwt.verify.publickey.location=publicKey.pem
 El proyecto tiene control de versiones Git con historial atómico que refleja el orden de desarrollo:
 
 ```
+chore(gateway-service): scaffold
+docs: add BITACORA.md with full project context
 feat(security): JWT authentication
 feat(cat-service): application layer
 feat(cat-service): domain layer
@@ -605,6 +628,7 @@ user-service      ✅
 auth-service      ✅
 storage-service   ✅
 cat-service       ✅
+gateway-service   🚧 (scaffold creado, sin implementación)
 ban-service       📋 (baneo temporal/permanente, desbaneo via @Scheduled)
 adoption-service  📋 (proceso adopción, historial, reportes)
 ```

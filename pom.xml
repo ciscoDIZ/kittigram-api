@@ -23,6 +23,7 @@
         <module>auth-service</module>
         <module>storage-service</module>
         <module>cat-service</module>
+        <module>gateway-service</module>
     </modules>
 
     <dependencyManagement>
