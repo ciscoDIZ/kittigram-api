@@ -1,5 +1,6 @@
 package org.ciscoadiz.gateway.proxy;
 
+import io.quarkus.logging.Log;
 import io.smallrye.mutiny.Uni;
 import io.vertx.mutiny.core.buffer.Buffer;
 import io.vertx.mutiny.ext.web.client.WebClient;
@@ -37,7 +38,7 @@ public class ProxyService {
         }
 
         String targetPath = path.replaceFirst("/api/(auth|users|cats|storage)", "/$1");
-
+        Log.infof("Proxying %s %s → %s%s", method, path, targetUrl, targetPath);
         var request = webClient.requestAbs(
                 io.vertx.core.http.HttpMethod.valueOf(method),
                 targetUrl + targetPath

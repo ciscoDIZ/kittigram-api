@@ -21,13 +21,19 @@ public class JwtAuthFilter {
 
     private static final Set<Pattern> PUBLIC_PATTERNS = Set.of(
             Pattern.compile("GET:/api/cats"),
-            Pattern.compile("GET:/api/cats/\\d+")
+            Pattern.compile("GET:/api/cats/\\d+"),
+            Pattern.compile("GET:/api/storage/files/.*"),
+            Pattern.compile("GET:/api/storage/files/.+")
     );
 
     @ServerRequestFilter
     public Uni<Response> filter(ContainerRequestContext ctx) {
         String method = ctx.getMethod();
         String path = ctx.getUriInfo().getPath();
+        String auth = ctx.getHeaderString("Authorization");
+
+        Log.infof("Gateway request: %s %s - Auth: %s", method, path, auth != null ? "present" : "missing");
+
         String key = method + ":" + path;
 
         if (PUBLIC_EXACT.contains(key)) {
@@ -36,11 +42,11 @@ public class JwtAuthFilter {
 
         for (Pattern pattern : PUBLIC_PATTERNS) {
             if (pattern.matcher(key).matches()) {
+                Log.infof("Request allowed: %s %s", method, path);
                 return Uni.createFrom().nullItem();
             }
         }
 
-        String auth = ctx.getHeaderString("Authorization");
         if (auth == null || !auth.startsWith("Bearer ")) {
             return Uni.createFrom().item(
                     Response.status(Response.Status.UNAUTHORIZED)
