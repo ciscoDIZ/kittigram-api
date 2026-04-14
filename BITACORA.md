@@ -299,6 +299,7 @@ service UserService {
 entity/RefreshToken.java
 repository/RefreshTokenRepository.java
 service/AuthService.java
+service/JwtTokenService.java    ← genera y firma el access token (extraído para testabilidad)
 dto/AuthRequest.java
 dto/AuthResponse.java
 dto/RefreshRequest.java         ← @JsonProperty en campo
@@ -676,7 +677,23 @@ CREATE SCHEMA IF NOT EXISTS cats;
 
 Cada servicio tiene su propio conjunto de tests de integración con `@QuarkusIntegrationTest` / `@QuarkusTest`. La estrategia varía por servicio según sus dependencias externas.
 
-### Estrategia por servicio
+### Tests unitarios
+
+#### user-service — UserServiceTest
+- **Framework**: Mockito (`@ExtendWith(MockitoExtension.class)`)
+- **Mocks**: `UserRepository`, `UserMapper`, Kafka `Emitter<UserRegisteredEvent>`, `ReactiveMailer`
+- **Tests**: registro con emisión de evento, activación de cuenta, desactivación, email duplicado (409), token inválido (400), usuario no encontrado (404)
+
+#### auth-service — AuthServiceTest
+- **Framework**: Mockito (`@ExtendWith(MockitoExtension.class)`)
+- **Mocks**: `UserServiceClient` (gRPC), `RefreshTokenRepository`, `JwtTokenService`
+- **Tests**: autenticación con credenciales válidas, credenciales inválidas (InvalidCredentialsException), refresh exitoso, token no encontrado, token expirado, token revocado, logout exitoso, logout con token inexistente
+
+**Nota de diseño**: para poder mockear la generación de JWT en los tests, se extrajo la lógica de firma a `JwtTokenService` (ver refactor en sección auth-service).
+
+---
+
+### Tests de integración
 
 #### user-service
 - **Framework**: `@QuarkusTest` + `RestAssured`

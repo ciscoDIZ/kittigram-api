@@ -150,7 +150,14 @@ Consumes Kafka events and sends transactional emails via SMTP.
 
 ## Testing
 
-Each service has integration tests using `@QuarkusTest` + RestAssured. External dependencies are handled per service:
+**Unit tests** use plain Mockito (`@ExtendWith(MockitoExtension.class)`) with no container dependencies:
+
+| Service      | Coverage                                                        |
+|--------------|-----------------------------------------------------------------|
+| user-service | Registration, activation, deactivation, duplicate email, errors |
+| auth-service | Authenticate, refresh (valid/expired/revoked), logout           |
+
+**Integration tests** use `@QuarkusTest` + RestAssured. External dependencies are handled per service:
 
 | Service              | DB             | External deps                                      |
 |----------------------|----------------|----------------------------------------------------|
