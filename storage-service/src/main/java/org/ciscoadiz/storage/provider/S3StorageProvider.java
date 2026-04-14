@@ -18,8 +18,15 @@ public class S3StorageProvider implements StorageProvider {
     @ConfigProperty(name = "quarkus.s3.endpoint-override")
     String endpoint;
 
+    @ConfigProperty(name = "quarkus.http.port")
+    int port;
+
     @Inject
     S3AsyncClient s3;
+
+    @ConfigProperty(name = "storage.public.url")
+    String publicUrl;
+
 
 
     @Override
@@ -50,6 +57,6 @@ public class S3StorageProvider implements StorageProvider {
 
     @Override
     public String getUrl(String key) {
-        return endpoint + "/" + bucketName + "/" + key;
+        return publicUrl + "/storage/files/" + key;
     }
 }
