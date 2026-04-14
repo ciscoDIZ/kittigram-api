@@ -350,6 +350,7 @@ exception/GlobalExceptionMapper.java
 **Endpoints REST**:
 - `POST /storage/upload` → multipart/form-data → 200 + {key, url}
 - `DELETE /storage/{key}` → 204
+- `GET /storage/files/{key}` → sirve el archivo desde S3 con su Content-Type original (**público**)
 
 **Validaciones**:
 - Tipos permitidos: `image/jpeg`, `image/png`
@@ -363,6 +364,10 @@ public interface StorageProvider {
     String getUrl(String key);
 }
 ```
+
+**URLs de imágenes**: `S3StorageProvider.getUrl()` devuelve `{storage.public.url}/storage/files/{key}`,
+donde `storage.public.url=http://localhost:8080/api` en dev. Las URLs apuntan al gateway,
+no a MinIO directamente, desacoplando las URLs públicas del almacenamiento interno.
 
 **Configuración MinIO** (`application.properties`):
 ```properties
@@ -526,7 +531,8 @@ La ruta interna se reescribe eliminando el prefijo `/api`: `/api/cats/1` → `/c
   proxy genérico sin definir cada endpoint individualmente
 - El proxy pasa `byte[]` crudos con el `Content-Type` original (incluido el multipart boundary),
   haciendo el forwarding transparente a cualquier tipo de body (JSON, multipart, etc.)
-- `GatewayResource` usa `@Consumes(WILDCARD)` en POST y PUT para no rechazar multipart
+- `GET /api/storage/files/*` es público (imágenes accesibles sin autenticación)
+- CORS configurado para `localhost:5173` (Vite) con credentials y max-age=86400
 
 ---
 
