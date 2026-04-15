@@ -4,6 +4,33 @@ Microservices backend for Kittigram, a cat adoption platform. Built with Quarkus
 
 ---
 
+## Table of Contents
+
+- [Architecture](#architecture)
+  - [Port Map](#port-map)
+- [Tech Stack](#tech-stack)
+- [Services](#services)
+  - [gateway-service](#gateway-service)
+  - [user-service](#user-service)
+  - [auth-service](#auth-service)
+  - [storage-service](#storage-service)
+  - [cat-service](#cat-service)
+  - [notification-service](#notification-service)
+- [Testing](#testing)
+- [Getting Started](#getting-started)
+  - [Prerequisites](#prerequisites)
+  - [Infrastructure](#infrastructure)
+  - [Database Setup](#database-setup)
+  - [Build](#build)
+  - [Run a service](#run-a-service)
+- [Security](#security)
+- [Environment Variables](#environment-variables)
+- [Development Tools](#development-tools)
+- [Known Patterns](#known-patterns)
+- [Roadmap](#roadmap)
+
+---
+
 ## Architecture
 
 Kittigram follows a **microservices architecture** organized as a Maven multi-module monorepo. Each service is independently deployable, has its own PostgreSQL schema, and communicates with other services via gRPC or Kafka.
