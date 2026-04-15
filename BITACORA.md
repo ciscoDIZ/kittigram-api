@@ -607,7 +607,7 @@ Par de claves RSA-2048 generadas con OpenSSL (PKCS8 para la privada):
 - `user-service/src/main/resources/publicKey.pem` → verificación
 - `cat-service/src/main/resources/publicKey.pem` → verificación
 
-El repositorio es **privado**, por eso las claves están versionadas.
+Los ficheros `*.pem` están excluidos de control de versiones (`.gitignore`). Cada desarrollador debe generarlos localmente. Ver instrucciones en el README → sección *Generating the RSA key pair*.
 
 ### Configuración por servicio
 

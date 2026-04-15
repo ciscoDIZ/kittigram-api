@@ -16,3 +16,6 @@ target/
 # OS
 .DS_Store
 Thumbs.db
+
+# RSA keys — generate locally, never commit
+*.pem

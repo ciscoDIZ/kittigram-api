@@ -24,6 +24,7 @@ Microservices backend for Kittigram, a cat adoption platform. Built with Quarkus
   - [Build](#build)
   - [Run a service](#run-a-service)
 - [Security](#security)
+  - [Generating the RSA key pair](#generating-the-rsa-key-pair)
 - [Environment Variables](#environment-variables)
 - [Development Tools](#development-tools)
 - [Known Patterns](#known-patterns)
@@ -273,7 +274,53 @@ mvn quarkus:dev -pl notification-service
 - Access token TTL: 900 seconds
 - Refresh token TTL: 7 days (stored in DB, revocable)
 
-> ⚠️ Keys are versioned because this is a private repository.
+> ⚠️ Key files (`*.pem`) are excluded from version control. Generate them locally before running any service.
+
+### Generating the RSA key pair
+
+#### Linux / macOS
+
+OpenSSL is pre-installed on most systems.
+
+```bash
+# 1. Generate the private key in PKCS8 format (required by SmallRye JWT)
+openssl genpkey -algorithm RSA -pkeyopt rsa_keygen_bits:2048 \
+  -out auth-service/src/main/resources/privateKey.pem
+
+# 2. Extract the public key
+openssl rsa -pubout \
+  -in  auth-service/src/main/resources/privateKey.pem \
+  -out auth-service/src/main/resources/publicKey.pem
+
+# 3. Copy the public key to every service that verifies tokens
+cp auth-service/src/main/resources/publicKey.pem user-service/src/main/resources/publicKey.pem
+cp auth-service/src/main/resources/publicKey.pem cat-service/src/main/resources/publicKey.pem
+cp auth-service/src/main/resources/publicKey.pem gateway-service/src/main/resources/publicKey.pem
+```
+
+#### Windows — Git Bash / WSL
+
+Git Bash ships with OpenSSL. Run the same commands above inside a Git Bash terminal or any WSL shell.
+
+#### Windows — PowerShell (OpenSSL via Winget)
+
+If OpenSSL is not available, install it first:
+
+```powershell
+winget install ShiningLight.OpenSSL
+```
+
+Then run the same three commands above in a new PowerShell or Git Bash session.
+
+#### Key placement summary
+
+| File | Path |
+|------|------|
+| `privateKey.pem` | `auth-service/src/main/resources/` |
+| `publicKey.pem` | `auth-service/src/main/resources/` |
+| `publicKey.pem` | `user-service/src/main/resources/` |
+| `publicKey.pem` | `cat-service/src/main/resources/` |
+| `publicKey.pem` | `gateway-service/src/main/resources/` |
 
 ---
 
