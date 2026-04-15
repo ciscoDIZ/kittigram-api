@@ -16,6 +16,7 @@ Microservices backend for Kittigram, a cat adoption platform. Built with Quarkus
   - [storage-service](#storage-service)
   - [cat-service](#cat-service)
   - [notification-service](#notification-service)
+  - [adoption-service](#adoption-service)
 - [Testing](#testing)
 - [Getting Started](#getting-started)
   - [Prerequisites](#prerequisites)
@@ -38,12 +39,13 @@ Kittigram follows a **microservices architecture** organized as a Maven multi-mo
 
 ```
 kittigram/
-├── user-service/         → User management, activation, gRPC server
+├── user-service/         → User management, activation, roles, gRPC server
 ├── auth-service/         → JWT authentication, refresh tokens, gRPC client
 ├── storage-service/      → File storage via S3/MinIO/Cloudflare R2
 ├── cat-service/          → Cat profiles and image management
 ├── gateway-service/      → API Gateway, JWT validation, CORS, routing
-└── notification-service/ → Email notifications via Kafka + MailHog/SMTP
+├── notification-service/ → Email notifications via Kafka + MailHog/SMTP
+└── adoption-service/     → Adoption workflow, screening forms, interviews, expenses
 ```
 
 ### Port Map
@@ -56,6 +58,7 @@ kittigram/
 | storage-service      | 8083  | —     |
 | cat-service          | 8084  | —     |
 | notification-service | 8085  | —     |
+| adoption-service     | 8086  | —     |
 | PostgreSQL           | 5432  | —     |
 | MinIO API            | 9000  | —     |
 | MinIO Console        | 9001  | —     |
@@ -176,6 +179,30 @@ Consumes Kafka events and sends transactional emails via SMTP.
 
 ---
 
+### adoption-service
+Manages the end-to-end cat adoption workflow. Adopters submit requests, complete screening forms, attend interviews, and sign legal contracts. Organisations manage the process and record expenses.
+
+**Endpoints:**
+- `POST /adoptions` — Create adoption request (JWT required, adopter)
+- `GET /adoptions/{id}` — Get adoption request detail (JWT required)
+- `GET /adoptions/me` — List my adoption requests (JWT required, adopter)
+- `GET /adoptions/organization` — List requests for my organization (JWT required, organization)
+- `PUT /adoptions/{id}/status` — Update adoption status (JWT required, organization owner)
+- `POST /adoptions/{id}/request-form` — Submit screening form (JWT required, adopter)
+- `POST /adoptions/{id}/interview` — Schedule interview (JWT required, organization)
+- `POST /adoptions/{id}/adoption-form` — Submit legal adoption form (JWT required, adopter)
+
+**Adoption status lifecycle:**
+`Pending` → `Reviewing` (form submitted) → `Accepted` / `Rejected` → `FormCompleted` → `AwaitingPayment` → `Completed`
+
+**Kafka topics:**
+- `adoption-form-submitted` (outgoing) → publishes screening form data for external analysis
+- `adoption-form-analysed` (incoming) → receives analysis decision (ACCEPTED / REJECTED)
+
+**Schema BD:** `adoption`
+
+---
+
 ## Testing
 
 **Unit tests** use plain Mockito (`@ExtendWith(MockitoExtension.class)`) with no container dependencies:
@@ -243,6 +270,7 @@ Schemas are created automatically by `init.sql` on first run:
 CREATE SCHEMA IF NOT EXISTS users;
 CREATE SCHEMA IF NOT EXISTS auth;
 CREATE SCHEMA IF NOT EXISTS cats;
+CREATE SCHEMA IF NOT EXISTS adoption;
 ```
 
 ### Build
@@ -260,6 +288,7 @@ mvn quarkus:dev -pl storage-service
 mvn quarkus:dev -pl cat-service
 mvn quarkus:dev -pl gateway-service
 mvn quarkus:dev -pl notification-service
+mvn quarkus:dev -pl adoption-service
 ```
 
 ---
@@ -296,6 +325,7 @@ openssl rsa -pubout \
 cp auth-service/src/main/resources/publicKey.pem user-service/src/main/resources/publicKey.pem
 cp auth-service/src/main/resources/publicKey.pem cat-service/src/main/resources/publicKey.pem
 cp auth-service/src/main/resources/publicKey.pem gateway-service/src/main/resources/publicKey.pem
+cp auth-service/src/main/resources/publicKey.pem adoption-service/src/main/resources/publicKey.pem
 ```
 
 #### Windows — Git Bash / WSL
@@ -321,6 +351,7 @@ Then run the same three commands above in a new PowerShell or Git Bash session.
 | `publicKey.pem` | `user-service/src/main/resources/` |
 | `publicKey.pem` | `cat-service/src/main/resources/` |
 | `publicKey.pem` | `gateway-service/src/main/resources/` |
+| `publicKey.pem` | `adoption-service/src/main/resources/` |
 
 ---
 
@@ -409,6 +440,8 @@ Value Objects are responsible for **format validation only**. Business rule vali
 - [x] Integration tests for all services
 - [x] Unit tests for all Service classes (Mockito)
 - [x] Value Objects introduced (`Email`, `ActivationToken` in user-service)
+- [x] User roles (`UserRole`: User, Organization, Admin)
+- [x] `adoption-service` — full adoption workflow with Kafka integration
 - [ ] Value Objects for remaining services
 - [ ] Repository interfaces as ports (DIP)
 - [ ] Hexagonal architecture remains implicit (no explicit package restructure planned)
@@ -418,7 +451,6 @@ Value Objects are responsible for **format validation only**. Business rule vali
 - [ ] Scheduled tasks (inactive user cleanup, unban)
 - [ ] Async image deletion via Kafka
 - [ ] `ban-service`
-- [ ] `adoption-service`
 - [ ] Production docker-compose
 - [ ] CI/CD with GitHub Actions
 

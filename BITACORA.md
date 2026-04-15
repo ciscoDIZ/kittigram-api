@@ -58,14 +58,15 @@ Kittigram es un portal donde los usuarios pueden subir perfiles de gatos para ad
 kittigram/
 ├── pom.xml                  ← padre agregador
 ├── docker-compose.yml       ← PostgreSQL + MinIO + Kafka + Zookeeper + Kafka UI
-├── init.sql                 ← CREATE SCHEMA users, auth, cats
+├── init.sql                 ← CREATE SCHEMA users, auth, cats, adoption
 ├── BITACORA.md
 ├── user-service/
 ├── auth-service/
 ├── storage-service/
 ├── cat-service/
 ├── gateway-service/
-└── notification-service/
+├── notification-service/
+└── adoption-service/
 ```
 
 ### pom.xml raíz (padre)
@@ -84,6 +85,7 @@ kittigram/
     <module>cat-service</module>
     <module>gateway-service</module>
     <module>notification-service</module>
+    <module>adoption-service</module>
 </modules>
 ```
 
@@ -513,6 +515,96 @@ quarkus.rest-client.storage-service.url=${STORAGE_SERVICE_URL:http://localhost:8
 
 ---
 
+### adoption-service
+**Puerto**: 8086
+**Esquema BD**: `adoption`
+
+**Dependencias**:
+- `quarkus-rest-jackson`
+- `quarkus-hibernate-reactive-panache`
+- `quarkus-reactive-pg-client`
+- `quarkus-messaging-kafka` (productor + consumidor)
+- `quarkus-smallrye-jwt` (verificación JWT)
+- `quarkus-container-image-jib`
+
+**Entidades**:
+- `AdoptionRequest` → tabla `adoption.adoption_requests`
+  - id, catId, adopterId, organizationId, status (AdoptionStatus), rejectionReason, createdAt, updatedAt
+  - `AdoptionStatus`: Pending, Reviewing, Accepted, Rejected, FormCompleted, AwaitingPayment, Completed
+- `AdoptionRequestForm` → formulario de screening del candidato (40+ campos)
+  - hasPreviousCatExperience, adultsInHousehold, hasChildren, childrenAges, hasOtherPets
+  - housingType (HousingType enum), housingSize, hasOutdoorAccess, isRental, rentalPetsAllowed
+  - householdActivityLevel (ActivityLevel enum), dailyPlayMinutes, motivationToAdopt
+  - understandsLongTermCommitment, hasVetBudget, allHouseholdMembersAgree, anyoneHasAllergies
+- `Interview` → tabla `adoption.interviews`
+  - adoptionRequestId, scheduledAt, location, notes
+- `AdoptionForm` → contrato legal de adopción
+  - adoptionRequestId, adopterName, adopterDni, catName, signedAt, terms
+- `Expense` → gastos asociados a la adopción
+  - adoptionRequestId, amount, description, recipient (ExpenseRecipient)
+
+**Estructura**:
+```
+entity/AdoptionRequest.java
+entity/AdoptionStatus.java
+entity/AdoptionRequestForm.java
+entity/AdoptionForm.java
+entity/Interview.java
+entity/Expense.java
+entity/ExpenseRecipient.java
+entity/ActivityLevel.java
+entity/HousingType.java
+repository/AdoptionRequestRepository.java
+repository/AdoptionRequestFormRepository.java
+repository/AdoptionFormRepository.java
+repository/InterviewRepository.java
+repository/ExpenseRepository.java
+service/AdoptionService.java
+mapper/AdoptionMapper.java
+event/AdoptionFormSubmittedEvent.java  ← publicado a Kafka (screening data)
+event/AdoptionFormAnalysedEvent.java   ← consumido de Kafka (decisión externa)
+dto/AdoptionRequestCreateRequest.java
+dto/AdoptionRequestResponse.java
+dto/AdoptionStatusUpdateRequest.java
+dto/AdoptionRequestFormCreateRequest.java
+dto/AdoptionRequestFormResponse.java
+dto/AdoptionFormCreateRequest.java
+dto/AdoptionFormResponse.java
+dto/InterviewCreateRequest.java
+dto/InterviewResponse.java
+dto/ExpenseResponse.java
+exception/AdoptionRequestNotFoundException.java
+exception/CatNotAvailableException.java
+exception/InvalidAdoptionStatusException.java
+exception/AdoptionFormAlreadySubmittedException.java
+exception/ErrorResponse.java
+exception/GlobalExceptionMapper.java
+```
+
+**Flujo de adopción**:
+1. Adoptante → `POST /adoptions` (crea solicitud, verifica que no haya solicitud activa para ese gato)
+2. Adoptante → `POST /adoptions/{id}/request-form` (formulario de screening; estado → Reviewing; publica `adoption-form-submitted` a Kafka)
+3. Servicio externo analiza el formulario → publica `adoption-form-analysed` (ACCEPTED/REJECTED)
+4. Organización → `PUT /adoptions/{id}/status` (puede aceptar/rechazar manualmente)
+5. Organización → `POST /adoptions/{id}/interview` (agenda entrevista; requiere estado Accepted)
+6. Adoptante → `POST /adoptions/{id}/adoption-form` (contrato legal; estado → FormCompleted; único, no repetible)
+
+**Kafka**:
+- `adoption-form-submitted` (outgoing): 40+ campos del formulario de screening para análisis externo
+- `adoption-form-analysed` (incoming): `{ adoptionRequestId, decision: "ACCEPTED"|"REJECTED", rejectionReason }` — deserialización manual con `ObjectMapper` (mismo patrón que `notification-service`)
+
+**Autorización**:
+- `requireAdopter()`: verifica que `adopterId` del token == `adopterId` de la solicitud
+- `requireOrganizationOwner()`: verifica que `organizationId` del token == `organizationId` de la solicitud
+- `requireStatus()`: verifica que el estado actual es el esperado; lanza `InvalidAdoptionStatusException` si no
+
+**Notas importantes**:
+- `existsActiveByCatId()` en el repository evita solicitudes duplicadas para el mismo gato
+- Dentro de `submitRequestForm()`, el cambio de estado en `AdoptionRequest` se persiste con `subscribe().with(...)` porque la transacción ya está abierta por el método principal
+- El `ObjectMapper` en `onFormAnalysed()` se instancia manualmente (patrón idéntico al `notification-service`)
+
+---
+
 ### notification-service
 **Puerto**: 8085
 **Sin BD** (solo envía emails)
@@ -886,9 +978,10 @@ void whenUserRegistered_thenActivationEmailSent() {
 4. **Tareas programadas** → `@Scheduled` para limpieza de usuarios inactivos
 5. **Mensajería asíncrona** → borrado de imágenes via mensajería (ahora es síncrono)
 6. **`ban-service`** → sistema de baneo temporal/permanente con desbaneo automático via `@Scheduled`
-7. **`adoption-service`** → proceso de adopción, historial, reportes
-8. **`docker-compose.yml` de producción** → con todos los servicios
-9. **cat-service**: tests de imagen (upload/delete) con WireMock para StorageClient
+7. **`docker-compose.yml` de producción** → con todos los servicios
+8. **cat-service**: tests de imagen (upload/delete) con WireMock para StorageClient
+9. **adoption-service**: tests unitarios e integración pendientes
+10. **gateway-service**: añadir rutas para adoption-service
 
 ### Deuda técnica
 - `@JsonProperty` en todos los records de todos los servicios para deserialización correcta
@@ -902,8 +995,8 @@ storage-service        ✅
 cat-service            ✅
 gateway-service        ✅
 notification-service   ✅ (email activación via Kafka)
+adoption-service       ✅ (proceso adopción, formulario screening, entrevistas, contratos, gastos)
 ban-service            📋 (baneo temporal/permanente, desbaneo via @Scheduled)
-adoption-service       📋 (proceso adopción, historial, reportes)
 ```
 
 ---
@@ -1006,6 +1099,39 @@ docker exec -it kittigram-postgres-1 psql -U kittigram -d kittigram -c "\dt cats
 ---
 
 ## Historial de Sesiones
+
+### Sesión 2026-04-15
+
+**Bloque 1 — Roles de usuario**
+- `user-service`: añadido `UserRole` enum (`User`, `Organization`, `Admin`). Los nuevos usuarios se crean con rol `User` por defecto. El rol se refleja en `UserCreateRequest`, `UserResponse` y `UserMapper`. Tests unitarios actualizados.
+
+**Bloque 2 — adoption-service (bootstrap y dominio)**
+- Bootstrap del módulo: `adoption-service` añadido al POM raíz. Esquema `adoption` añadido a `init.sql`.
+- Entidades de dominio: `AdoptionRequest`, `Expense`, `AdoptionStatus`, `ExpenseRecipient`.
+- Configuración PostgreSQL, JWT y Jib. Dockerfiles multi-stage para JVM y native.
+- `notification-service`: corregido deserializador a `StringDeserializer` para eventos `user-registered`.
+
+**Bloque 3 — adoption-service (capa de dominio completa)**
+- Ciclo de vida de estados extendido: añadidos `rejectionReason`, `Reviewing`, `AwaitingPayment`.
+- Entidades `AdoptionRequestForm` (formulario screening, 40+ campos) con enums `ActivityLevel` y `HousingType`.
+- Entidades `Interview` y `AdoptionForm` (contrato legal).
+- Repositories para todas las entidades. DTOs completos (create/response) para cada recurso.
+- Mapper `AdoptionMapper`.
+- Custom exceptions: `AdoptionRequestNotFoundException`, `CatNotAvailableException`, `InvalidAdoptionStatusException`, `AdoptionFormAlreadySubmittedException`. `GlobalExceptionMapper` y `ErrorResponse`.
+
+**Bloque 4 — adoption-service (capa de servicio y Kafka)**
+- `AdoptionService` completo con toda la lógica de negocio:
+  - `createAdoptionRequest`: evita solicitudes duplicadas para el mismo gato con `existsActiveByCatId()`
+  - `submitRequestForm`: valida estado Pending, persiste formulario, cambia estado a Reviewing, publica `adoption-form-submitted` a Kafka
+  - `scheduleInterview`: valida estado Accepted, agenda entrevista
+  - `submitAdoptionForm`: valida estado Accepted, evita duplicados, cambia estado a FormCompleted
+  - `onFormAnalysed` (`@Incoming`): consume decisión externa (ACCEPTED/REJECTED) y actualiza estado
+- Eventos Kafka: `AdoptionFormSubmittedEvent` (outgoing, 40+ campos) y `AdoptionFormAnalysedEvent` (incoming).
+- `AdoptionRequestFormRepository` extraído para el servicio.
+
+**Estado al cierre**: 7 servicios implementados. adoption-service sin tests por ahora.
+
+---
 
 ### Sesión 2026-04-14
 
