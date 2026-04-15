@@ -4,8 +4,6 @@ import io.quarkus.hibernate.reactive.panache.PanacheEntity;
 import jakarta.persistence.*;
 
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
 
 @Entity
 @Table(name = "adoption_requests", schema = "adoption")
@@ -26,6 +24,9 @@ public class AdoptionRequest extends PanacheEntity {
 
     @Column
     public String notes;
+
+    @Column
+    public String rejectionReason;
 
     @Column(nullable = false, updatable = false)
     public LocalDateTime createdAt;
