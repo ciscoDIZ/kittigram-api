@@ -25,6 +25,7 @@
         <module>cat-service</module>
         <module>gateway-service</module>
         <module>notification-service</module>
+        <module>adoption-service</module>
     </modules>
 
     <dependencyManagement>
