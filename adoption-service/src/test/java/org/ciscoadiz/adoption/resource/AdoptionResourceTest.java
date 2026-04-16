@@ -81,16 +81,97 @@ class AdoptionResourceTest {
     }
 
     @Test
-    @TestSecurity(user = "1", roles = "user")
+    @TestSecurity(user = "100", roles = "user")
     @JwtSecurity(claims = {
-            @Claim(key = "sub", value = "1"),
-            @Claim(key = "email", value = "test@kittigram.org")
+            @Claim(key = "sub", value = "100"),
+            @Claim(key = "email", value = "adopter@kittigram.org")
     })
     void testFindMyAdoptions() {
         given()
                 .when()
                 .get("/adoptions/my")
                 .then()
-                .statusCode(200);
+                .statusCode(200)
+                .body("size()", equalTo(0));
+    }
+
+    @Test
+    @TestSecurity(user = "200", roles = "user")
+    @JwtSecurity(claims = {
+            @Claim(key = "sub", value = "200"),
+            @Claim(key = "email", value = "org@kittigram.org")
+    })
+    void testFindByOrganization() {
+        given()
+                .when()
+                .get("/adoptions/organization")
+                .then()
+                .statusCode(200)
+                .body("size()", equalTo(0));
+    }
+
+    @Test
+    @TestSecurity(user = "1", roles = "user")
+    @JwtSecurity(claims = {
+            @Claim(key = "sub", value = "1"),
+            @Claim(key = "email", value = "test@kittigram.org")
+    })
+    void testUpdateStatusNotFound() {
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+            {
+                "status": "Accepted",
+                "reason": null
+            }
+            """)
+                .when()
+                .patch("/adoptions/999999/status")
+                .then()
+                .statusCode(404);
+    }
+
+    @Test
+    @TestSecurity(user = "1", roles = "user")
+    @JwtSecurity(claims = {
+            @Claim(key = "sub", value = "1"),
+            @Claim(key = "email", value = "test@kittigram.org")
+    })
+    void testSubmitRequestFormNotFound() {
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+            {
+                "hasPreviousCatExperience": true,
+                "adultsInHousehold": 2,
+                "hasChildren": false,
+                "hasOtherPets": false,
+                "hoursAlonePerDay": 8,
+                "stableHousing": true,
+                "housingType": "Apartment",
+                "housingSize": 60,
+                "hasOutdoorAccess": false,
+                "isRental": false,
+                "hasWindowsWithView": true,
+                "hasVerticalSpace": true,
+                "hasHidingSpots": true,
+                "householdActivityLevel": "Quiet",
+                "whyCatsNeedToPlay": "instinct",
+                "dailyPlayMinutes": 30,
+                "plannedEnrichment": "toys",
+                "reactionToUnwantedBehavior": "ignore",
+                "hasScratchingPost": true,
+                "willingToEnrichEnvironment": true,
+                "motivationToAdopt": "love cats",
+                "understandsLongTermCommitment": true,
+                "hasVetBudget": true,
+                "allHouseholdMembersAgree": true,
+                "anyoneHasAllergies": false
+            }
+            """)
+                .when()
+                .post("/adoptions/999999/form")
+                .then()
+                .statusCode(404);
     }
 }

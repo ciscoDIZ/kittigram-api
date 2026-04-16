@@ -206,4 +206,155 @@ class AdoptionServiceTest {
                         .await().indefinitely()
         );
     }
+
+    @Test
+    void submitRequestForm_validStatus_success() {
+        var form = new AdoptionRequestForm();
+        form.id = 1L;
+        form.adoptionRequestId = 1L;
+
+        var formResponse = new AdoptionRequestFormResponse(
+                1L, 1L, true, null, 2, false, null,
+                false, null, 8, true, null,
+                HousingType.Apartment, 60, false, false, null,
+                true, true, true, ActivityLevel.Quiet,
+                "instinct", 30, "toys", "ignore", true, true,
+                "love cats", true, true, true, false, null,
+                LocalDateTime.now()
+        );
+
+        var request = new AdoptionRequestFormCreateRequest(
+                true, null, 2, false, null, false, null,
+                8, true, null, HousingType.Apartment, 60,
+                false, false, null, true, true, true,
+                ActivityLevel.Quiet, "instinct", 30, "toys",
+                "ignore", true, true, "love cats", true,
+                true, true, false, null
+        );
+
+        when(adoptionRequestRepository.findById(1L))
+                .thenReturn(Uni.createFrom().item(testAdoptionRequest));
+        when(adoptionRequestFormRepository.persist(any(AdoptionRequestForm.class)))
+                .thenReturn(Uni.createFrom().item(form));
+        when(adoptionRequestRepository.<AdoptionRequest>persist(any(AdoptionRequest.class)))
+                .thenReturn(Uni.createFrom().item(testAdoptionRequest));
+        when(adoptionMapper.toEntity(any(AdoptionRequestFormCreateRequest.class), eq(1L)))
+                .thenReturn(form);
+        when(adoptionMapper.toResponse(form))
+                .thenReturn(formResponse);
+
+        var result = adoptionService.submitRequestForm(1L, request, 100L)
+                .await().indefinitely();
+
+        assertNotNull(result);
+        verify(adoptionFormSubmittedEmitter).send(any(AdoptionFormSubmittedEvent.class));
+    }
+
+    @Test
+    void submitRequestForm_wrongStatus_throwsInvalidAdoptionStatusException() {
+        testAdoptionRequest.status = AdoptionStatus.Reviewing;
+
+        var request = new AdoptionRequestFormCreateRequest(
+                true, null, 2, false, null, false, null,
+                8, true, null, HousingType.Apartment, 60,
+                false, false, null, true, true, true,
+                ActivityLevel.Quiet, "instinct", 30, "toys",
+                "ignore", true, true, "love cats", true,
+                true, true, false, null
+        );
+
+        when(adoptionRequestRepository.findById(1L))
+                .thenReturn(Uni.createFrom().item(testAdoptionRequest));
+
+        assertThrows(InvalidAdoptionStatusException.class, () ->
+                adoptionService.submitRequestForm(1L, request, 100L)
+                        .await().indefinitely()
+        );
+    }
+
+    @Test
+    void submitRequestForm_notAdopter_throwsForbiddenException() {
+        var request = new AdoptionRequestFormCreateRequest(
+                true, null, 2, false, null, false, null,
+                8, true, null, HousingType.Apartment, 60,
+                false, false, null, true, true, true,
+                ActivityLevel.Quiet, "instinct", 30, "toys",
+                "ignore", true, true, "love cats", true,
+                true, true, false, null
+        );
+
+        when(adoptionRequestRepository.findById(1L))
+                .thenReturn(Uni.createFrom().item(testAdoptionRequest));
+
+        assertThrows(ForbiddenException.class, () ->
+                adoptionService.submitRequestForm(1L, request, 999L)
+                        .await().indefinitely()
+        );
+    }
+
+    @Test
+    void scheduleInterview_validStatus_success() {
+        testAdoptionRequest.status = AdoptionStatus.Accepted;
+
+        var interview = new Interview();
+        interview.id = 1L;
+        interview.adoptionRequestId = 1L;
+        interview.scheduledAt = LocalDateTime.now().plusDays(7);
+
+        var interviewResponse = new InterviewResponse(
+                1L, 1L, interview.scheduledAt, "Notes", null,
+                LocalDateTime.now(), LocalDateTime.now()
+        );
+
+        var request = new InterviewCreateRequest(
+                LocalDateTime.now().plusDays(7), "Notes"
+        );
+
+        when(adoptionRequestRepository.findById(1L))
+                .thenReturn(Uni.createFrom().item(testAdoptionRequest));
+        when(adoptionMapper.toEntity(any(InterviewCreateRequest.class), eq(1L)))
+                .thenReturn(interview);
+        when(interviewRepository.persist(any(Interview.class)))
+                .thenReturn(Uni.createFrom().item(interview));
+        when(adoptionMapper.toResponse(interview))
+                .thenReturn(interviewResponse);
+
+        var result = adoptionService.scheduleInterview(1L, request, 200L)
+                .await().indefinitely();
+
+        assertNotNull(result);
+        assertEquals(1L, result.adoptionRequestId());
+    }
+
+    @Test
+    void submitAdoptionForm_notAdopter_throwsForbiddenException() {
+        testAdoptionRequest.status = AdoptionStatus.Accepted;
+
+        var request = new AdoptionFormCreateRequest(
+                "Test User", "12345678A", "666666666",
+                "Calle Test 1", "La Orotava", "38300",
+                true, true, true, true, null
+        );
+
+        when(adoptionRequestRepository.findById(1L))
+                .thenReturn(Uni.createFrom().item(testAdoptionRequest));
+
+        assertThrows(ForbiddenException.class, () ->
+                adoptionService.submitAdoptionForm(1L, request, 999L)
+                        .await().indefinitely()
+        );
+    }
+
+    @Test
+    void findByOrganizationId_returnsListOfResponses() {
+        when(adoptionRequestRepository.findByOrganizationId(200L))
+                .thenReturn(Uni.createFrom().item(List.of(testAdoptionRequest)));
+        when(adoptionMapper.toResponse(testAdoptionRequest))
+                .thenReturn(testAdoptionRequestResponse);
+
+        var result = adoptionService.findByOrganizationId(200L)
+                .await().indefinitely();
+
+        assertEquals(1, result.size());
+    }
 }
