@@ -1,6 +1,7 @@
 package org.ciscoadiz.adoption.repository;
 
 import io.quarkus.hibernate.reactive.panache.PanacheRepository;
+import io.quarkus.hibernate.reactive.panache.common.WithSession;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -24,6 +25,7 @@ public class AdoptionRequestRepository implements PanacheRepository<AdoptionRequ
         return list("catId", catId);
     }
 
+    @WithSession
     public Uni<Boolean> existsActiveByCatId(Long catId) {
         return count("catId = ?1 and status not in ?2", catId,
                 List.of(AdoptionStatus.Rejected, AdoptionStatus.Completed))
