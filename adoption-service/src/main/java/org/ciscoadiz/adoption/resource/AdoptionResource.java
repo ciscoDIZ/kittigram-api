@@ -27,7 +27,8 @@ public class AdoptionResource {
     @POST
     public Uni<Response> createAdoptionRequest(AdoptionRequestCreateRequest request) {
         Long adopterId = Long.parseLong(jwt.getSubject());
-        return adoptionService.createAdoptionRequest(request, adopterId)
+        String adopterEmail = jwt.getClaim("email");
+        return adoptionService.createAdoptionRequest(request, adopterId, adopterEmail)
                 .onItem().transform(r -> Response.status(Response.Status.CREATED).entity(r).build());
     }
 

@@ -44,10 +44,9 @@ public class AdoptionService {
     @Inject
     @Channel("adoption-form-submitted")
     Emitter<AdoptionFormSubmittedEvent> adoptionFormSubmittedEmitter;
-
     @WithTransaction
     public Uni<AdoptionRequestResponse> createAdoptionRequest(
-            AdoptionRequestCreateRequest request, Long adopterId) {
+            AdoptionRequestCreateRequest request, Long adopterId, String adopterEmail) {
 
         return adoptionRequestRepository.existsActiveByCatId(request.catId())
                 .onItem().transformToUni(exists -> {
@@ -55,7 +54,7 @@ public class AdoptionService {
                         return Uni.createFrom()
                                 .failure(new CatNotAvailableException(request.catId()));
                     }
-                    AdoptionRequest entity = adoptionMapper.toEntity(request, adopterId);
+                    AdoptionRequest entity = adoptionMapper.toEntity(request, adopterId, adopterEmail);
                     return adoptionRequestRepository.persist(entity);
                 })
                 .onItem().transform(adoptionMapper::toResponse);
@@ -198,6 +197,7 @@ public class AdoptionService {
     private AdoptionFormSubmittedEvent buildFormSubmittedEvent(
             AdoptionRequest adoption, AdoptionRequestForm form) {
         return new AdoptionFormSubmittedEvent(
+                adoption.adopterEmail,
                 adoption.id,
                 adoption.catId,
                 adoption.adopterId,
