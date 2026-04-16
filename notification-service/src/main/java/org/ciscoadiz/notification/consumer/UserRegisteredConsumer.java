@@ -4,6 +4,8 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.logging.Log;
 import io.quarkus.mailer.Mail;
 import io.quarkus.mailer.reactive.ReactiveMailer;
+import io.quarkus.qute.Location;
+import io.quarkus.qute.Template;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
@@ -19,6 +21,10 @@ public class UserRegisteredConsumer {
     @Inject
     ObjectMapper objectMapper;
 
+    @Inject
+    @Location("emails/activation")
+    Template activationTemplate;
+
     @Incoming("user-registered")
     public Uni<Void> onUserRegistered(String message) {
         try {
@@ -27,16 +33,16 @@ public class UserRegisteredConsumer {
 
             String activationUrl = "http://localhost:8080/api/users/activate?token=" + event.activationToken();
 
+            String html = activationTemplate
+                    .data("name", event.name())
+                    .data("activationUrl", activationUrl)
+                    .render();
+
             return mailer.send(
                     Mail.withHtml(
                             event.email(),
                             "Activa tu cuenta en Kittigram 🐱",
-                            """
-                            <h1>¡Bienvenido a Kittigram, %s!</h1>
-                            <p>Para activar tu cuenta haz clic en el siguiente enlace:</p>
-                            <a href="%s">Activar mi cuenta</a>
-                            <p>El enlace expirará en 24 horas.</p>
-                            """.formatted(event.name(), activationUrl)
+                            html
                     )
             );
         } catch (Exception e) {
