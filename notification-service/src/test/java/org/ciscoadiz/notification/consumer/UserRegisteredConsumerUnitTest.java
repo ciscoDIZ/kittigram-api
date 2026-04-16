@@ -3,6 +3,8 @@ package org.ciscoadiz.notification.consumer;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import io.quarkus.mailer.Mail;
 import io.quarkus.mailer.reactive.ReactiveMailer;
+import io.quarkus.qute.Template;
+import io.quarkus.qute.TemplateInstance;
 import io.smallrye.mutiny.Uni;
 import org.ciscoadiz.notification.event.UserRegisteredEvent;
 import org.junit.jupiter.api.Test;
@@ -14,6 +16,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.*;
 
 @ExtendWith(MockitoExtension.class)
@@ -25,6 +28,12 @@ class UserRegisteredConsumerUnitTest {
     @Mock
     ObjectMapper objectMapper;
 
+    @Mock
+    Template activationTemplate;
+
+    @Mock
+    TemplateInstance templateInstance;
+
     @InjectMocks
     UserRegisteredConsumer consumer;
 
@@ -34,6 +43,9 @@ class UserRegisteredConsumerUnitTest {
         var json = new ObjectMapper().writeValueAsString(event);
 
         when(objectMapper.readValue(json, UserRegisteredEvent.class)).thenReturn(event);
+        when(activationTemplate.data(anyString(), any())).thenReturn(templateInstance);
+        when(templateInstance.data(anyString(), any())).thenReturn(templateInstance);
+        when(templateInstance.render()).thenReturn("<html>token-123</html>");
         when(mailer.send(any(Mail.class))).thenReturn(Uni.createFrom().voidItem());
 
         consumer.onUserRegistered(json).await().indefinitely();
@@ -47,6 +59,9 @@ class UserRegisteredConsumerUnitTest {
         var json = new ObjectMapper().writeValueAsString(event);
 
         when(objectMapper.readValue(json, UserRegisteredEvent.class)).thenReturn(event);
+        when(activationTemplate.data(anyString(), any())).thenReturn(templateInstance);
+        when(templateInstance.data(anyString(), any())).thenReturn(templateInstance);
+        when(templateInstance.render()).thenReturn("<html>token-123</html>");
         when(mailer.send(any(Mail.class))).thenReturn(Uni.createFrom().voidItem());
 
         consumer.onUserRegistered(json).await().indefinitely();
