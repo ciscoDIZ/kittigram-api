@@ -28,6 +28,8 @@ Kittigram es un portal donde los usuarios pueden subir perfiles de gatos para ad
 8083  → storage-service HTTP
 8084  → cat-service HTTP
 8085  → notification-service HTTP
+8086  → adoption-service HTTP
+8087  → form-analysis-service HTTP
 8008  → Kafka UI (provectuslabs/kafka-ui)
 9000  → MinIO API S3
 9001  → MinIO consola web
@@ -58,7 +60,7 @@ Kittigram es un portal donde los usuarios pueden subir perfiles de gatos para ad
 kittigram/
 ├── pom.xml                  ← padre agregador
 ├── docker-compose.yml       ← PostgreSQL + MinIO + Kafka + Zookeeper + Kafka UI
-├── init.sql                 ← CREATE SCHEMA users, auth, cats, adoption
+├── init.sql                 ← CREATE SCHEMA users, auth, cats, adoption, form_analysis
 ├── BITACORA.md
 ├── user-service/
 ├── auth-service/
@@ -66,7 +68,8 @@ kittigram/
 ├── cat-service/
 ├── gateway-service/
 ├── notification-service/
-└── adoption-service/
+├── adoption-service/
+└── form-analysis-service/
 ```
 
 ### pom.xml raíz (padre)
@@ -86,6 +89,7 @@ kittigram/
     <module>gateway-service</module>
     <module>notification-service</module>
     <module>adoption-service</module>
+    <module>form-analysis-service</module>
 </modules>
 ```
 
@@ -186,6 +190,62 @@ public Integer imageOrder;
 **Problema**: Con `@WithTransaction` en el proxy CDI, los parámetros del método podían llegar como `null`.
 
 **Solución**: Extraer el valor del parámetro antes de llamar al service, o asegurarse de que la deserialización funciona correctamente (ver problema #2).
+
+### 9. init.sql de docker-compose no se re-ejecuta con volumen existente
+**Problema**: Al añadir nuevos esquemas a `init.sql`, el script no se vuelve a ejecutar si el volumen de PostgreSQL ya existe.
+
+**Solución**: Recrear el volumen desde cero:
+```bash
+docker compose down -v
+docker compose up -d
+```
+
+### 10. @Incoming + @WithTransaction son incompatibles
+**Problema**: Combinar `@Incoming` con `@WithTransaction` en el mismo método lanza error en runtime porque SmallRye y la interceptión CDI de transacciones entran en conflicto.
+
+**Solución**: Usar `Panache.withTransaction()` de forma programática dentro del cuerpo del método:
+```java
+@Incoming("some-topic")
+public Uni<Void> onMessage(String payload) {
+    return Panache.withTransaction(() -> /* persistencia */);
+}
+```
+
+### 11. Panache.withTransaction() falla en tests con InMemoryConnector
+**Problema**: Al usar `InMemoryConnector` en tests, `Panache.withTransaction()` falla porque no hay datasource real disponible en el contexto del test de mensajería.
+
+**Solución**: Extraer la persistencia a un bean separado (`FormAnalysisPersistenceService`) anotado con `@WithTransaction`, y mockear ese bean en los tests con `@InjectMock`. Esto separa la responsabilidad de persistencia de la de consumo de mensajes y permite testar el consumer de forma aislada.
+
+### 12. GlobalExceptionMapper no captura jakarta.ws.rs.NotFoundException
+**Problema**: Las rutas no encontradas devolvían una respuesta genérica sin pasar por el mapper personalizado.
+
+**Solución**: Añadir explícitamente `jakarta.ws.rs.NotFoundException` al bloque de mapeo en `GlobalExceptionMapper`.
+
+### 13. Conflicto de rutas /adoptions/my con /adoptions/{id}
+**Problema**: El path literal `/adoptions/my` podía colisionar con el path parametrizado `/adoptions/{id}` si JAX-RS resolvía primero el parámetrico.
+
+**Solución**: JAX-RS resuelve correctamente dando prioridad a los segmentos literales sobre los parametrizados. No requiere cambios, solo confirmar el comportamiento.
+
+### 14. Template Qute no se inyecta con @InjectMocks de Mockito
+**Problema**: Al usar `@InjectMocks` en tests unitarios de consumers que inyectan `@Location("...") Template template`, Mockito no sabe cómo inyectar el `Template` ni encadenar `TemplateInstance`.
+
+**Solución**: Declarar explícitamente `@Mock Template myTemplate` y `@Mock TemplateInstance myTemplateInstance`, y configurar el comportamiento encadenado:
+```java
+@Mock Template activationEmail;
+@Mock TemplateInstance templateInstance;
+
+when(activationEmail.data(anyString(), any())).thenReturn(templateInstance);
+when(templateInstance.data(anyString(), any())).thenReturn(templateInstance);
+when(templateInstance.createUni()).thenReturn(Uni.createFrom().item("html content"));
+```
+
+### 15. UserRegisteredEventDeserializer no encontrado en classpath
+**Problema**: Al arrancar `notification-service`, Kafka lanzaba `ClassNotFoundException` buscando un deserializador personalizado que no existe en el módulo.
+
+**Solución**: Configurar `StringDeserializer` y deserializar manualmente con `ObjectMapper` dentro del consumer (patrón ya establecido en el proyecto):
+```properties
+mp.messaging.incoming.user-registered.value.deserializer=org.apache.kafka.common.serialization.StringDeserializer
+```
 
 ### 8. PanacheRepository no tiene stream() en modo reactivo
 **Problema**: `find("catId", catId).stream()` no compila — `stream()` no existe en `PanacheQuery` reactivo.
@@ -605,6 +665,65 @@ exception/GlobalExceptionMapper.java
 
 ---
 
+### form-analysis-service
+**Puerto**: 8087
+**Esquema BD**: `form_analysis`
+
+**Dependencias**:
+- `quarkus-rest-jackson`
+- `quarkus-hibernate-reactive-panache`
+- `quarkus-reactive-pg-client`
+- `quarkus-messaging-kafka` (consumidor + productor)
+- `quarkus-container-image-jib`
+
+**Entidades**:
+- `FormAnalysis` → tabla `form_analysis.form_analyses`
+  - id, adoptionRequestId, decision (AnalysisDecision), rejectionReason, createdAt
+  - `AnalysisDecision`: ACCEPTED, REJECTED
+- `FormFlag` → tabla `form_analysis.form_flags`
+  - id, formAnalysisId, category, description, severity (FlagSeverity)
+  - `FlagSeverity`: CRITICAL, WARNING, NOTICE
+
+**Estructura**:
+```
+entity/FormAnalysis.java
+entity/FormFlag.java
+entity/AnalysisDecision.java
+entity/FlagSeverity.java
+repository/FormAnalysisRepository.java
+repository/FormFlagRepository.java
+rules/FormAnalysisRules.java        ← lógica de reglas por categorías
+service/FormAnalysisService.java    ← consumer + producer Kafka
+service/FormAnalysisPersistenceService.java  ← persistencia aislada con @WithTransaction
+event/AdoptionFormSubmittedEvent.java  ← consumido de Kafka
+event/AdoptionFormAnalysedEvent.java   ← publicado a Kafka
+exception/ErrorResponse.java
+exception/GlobalExceptionMapper.java
+```
+
+**Flujo**:
+1. `adoption-service` publica `AdoptionFormSubmittedEvent` en topic `adoption-form-submitted`
+2. `FormAnalysisService` consume el evento vía `@Incoming("adoption-form-submitted")`
+3. `FormAnalysisRules` evalúa el formulario y genera flags clasificados
+4. Se determina la decisión: REJECTED si hay algún flag CRITICAL, ACCEPTED en caso contrario
+5. `FormAnalysisPersistenceService` persiste la decisión y los flags en BD (separado para permitir tests)
+6. Se publica `AdoptionFormAnalysedEvent` en topic `adoption-form-analysed`
+
+**Reglas de análisis** (`FormAnalysisRules`):
+- **Critical**: experiencia inexistente con mascotas + niños pequeños, vivienda de alquiler sin permiso de mascotas, ningún miembro del hogar de acuerdo
+- **Warning**: sin acceso exterior ni espacio suficiente, sin presupuesto veterinario, alguien con alergias
+- **Notice**: compromiso a largo plazo no confirmado del todo, actividad baja con muchos niños
+
+**Kafka**:
+- `adoption-form-submitted` (incoming): recibe el formulario de screening completo
+- `adoption-form-analysed` (outgoing): publica la decisión con `adoptionRequestId`, `decision` y `rejectionReason` opcional
+
+**Notas importantes**:
+- `@Incoming` + `@WithTransaction` son incompatibles → persistencia extraída a `FormAnalysisPersistenceService` (ver Problema #10 y #11)
+- En tests, `FormAnalysisPersistenceService` se mockea con `@InjectMock` para aislar el consumer
+
+---
+
 ### notification-service
 **Puerto**: 8085
 **Sin BD** (solo envía emails)
@@ -615,17 +734,32 @@ exception/GlobalExceptionMapper.java
 - `quarkus-mailer`
 - `quarkus-container-image-jib`
 
+**Dependencias** (adicionales):
+- `quarkus-qute` (plantillas HTML)
+- `quarkus-rest-qute`
+
 **Estructura**:
 ```
-consumer/UserRegisteredConsumer.java  ← @Incoming("user-registered")
-event/UserRegisteredEvent.java        ← mismo record que user-service
+consumer/UserRegisteredConsumer.java         ← @Incoming("user-registered")
+consumer/AdoptionFormAnalysedConsumer.java   ← @Incoming("adoption-form-analysed")
+event/UserRegisteredEvent.java               ← mismo record que user-service
+event/AdoptionFormAnalysedEvent.java         ← mismo record que adoption/form-analysis-service
+resources/templates/
+    activation-email.html                    ← plantilla Qute email activación
+    adoption-accepted-email.html             ← plantilla Qute formulario aceptado
+    adoption-rejected-email.html             ← plantilla Qute formulario rechazado
 ```
 
 **Flujo**:
 1. `user-service` publica `UserRegisteredEvent` en topic `user-registered`
 2. `notification-service` consume el mensaje vía `@Incoming("user-registered")`
 3. Deserializa con `ObjectMapper` (llega como `String`)
-4. Envía email HTML de activación via `ReactiveMailer`
+4. Renderiza plantilla Qute y envía email HTML via `ReactiveMailer`
+
+**Flujo adicional (adopción)**:
+1. `form-analysis-service` publica `AdoptionFormAnalysedEvent` en topic `adoption-form-analysed`
+2. `AdoptionFormAnalysedConsumer` consume el evento
+3. Envía email de resultado (aceptado o rechazado) al adoptante con plantilla Qute correspondiente
 
 **Configuración Kafka**:
 ```properties
@@ -634,16 +768,23 @@ mp.messaging.incoming.user-registered.connector=smallrye-kafka
 mp.messaging.incoming.user-registered.topic=user-registered
 mp.messaging.incoming.user-registered.value.deserializer=org.apache.kafka.common.serialization.StringDeserializer
 mp.messaging.incoming.user-registered.group.id=notification-service
+mp.messaging.incoming.adoption-form-analysed.connector=smallrye-kafka
+mp.messaging.incoming.adoption-form-analysed.topic=adoption-form-analysed
+mp.messaging.incoming.adoption-form-analysed.value.deserializer=org.apache.kafka.common.serialization.StringDeserializer
+mp.messaging.incoming.adoption-form-analysed.group.id=notification-service
 ```
 
-**Email de activación**:
-- Subject: "Activa tu cuenta en Kittigram 🐱"
-- Contiene enlace: `http://localhost:8080/api/users/activate?token={activationToken}`
+**Emails**:
+- Activación: "Activa tu cuenta en Kittigram 🐱" → enlace `http://localhost:8080/api/users/activate?token={activationToken}`
+- Adopción aceptada: notifica al adoptante que puede continuar el proceso
+- Adopción rechazada: notifica al adoptante con el motivo de rechazo
 - MailHog en dev (puerto 1025 SMTP, 8025 web UI)
 
 **Notas importantes**:
-- El mensaje Kafka llega como `String` (no como el tipo directamente) → se deserializa manualmente con `ObjectMapper`
-- El `notification-service` tiene su propia copia del record `UserRegisteredEvent` (sin dependencias entre módulos Maven)
+- El mensaje Kafka llega como `String` → se deserializa manualmente con `ObjectMapper`
+- El `notification-service` tiene su propia copia de los events (sin dependencias entre módulos Maven)
+- Las plantillas Qute se inyectan con `@Location("nombre-plantilla.html") Template miTemplate`
+- Para tests unitarios: mockear `Template` y `TemplateInstance` explícitamente y encadenar `data()` (ver Problema #14)
 
 ---
 
@@ -727,24 +868,133 @@ mp.jwt.verify.publickey.location=publicKey.pem
 
 ## Repositorio Git
 
-El proyecto tiene control de versiones Git con historial atómico que refleja el orden de desarrollo:
+### Convenciones de Commits
+
+El proyecto usa **Conventional Commits** con scope obligatorio (excepto en commits transversales). Los mensajes están en **inglés**, en **imperativo**, sin punto final.
+
+#### Formato
 
 ```
-feat(gateway-service): reverse proxy implementation
-feat(gateway-service): Vert.x WebClient config
-feat(gateway-service): JWT auth filter + routing config
-chore(gateway-service): scaffold
-docs: add BITACORA.md with full project context
-feat(security): JWT authentication
-feat(cat-service): application layer
-feat(cat-service): domain layer
-feat(storage-service): S3/MinIO file storage
-feat(auth-service): application layer
-feat(auth-service): domain layer
-feat(user-service): gRPC server
-feat(user-service): application layer
+<type>(<scope>): <descripción>
+```
+
+#### Tipos permitidos
+
+| Tipo | Uso |
+|------|-----|
+| `feat` | Nueva funcionalidad (endpoints, entidades, lógica de negocio, Kafka, etc.) |
+| `fix` | Corrección de bugs |
+| `test` | Añadir o modificar tests (unitarios o integración) |
+| `refactor` | Reestructuración sin cambiar comportamiento |
+| `docs` | Documentación (BITACORA.md, README.md) |
+| `chore` | Tareas de mantenimiento (scaffold, docker-compose, dependencias) |
+| `build` | Configuración de build (pom.xml, dependencias Maven) |
+| `security` | Cambios de seguridad transversales (sin scope de servicio) |
+
+#### Scope
+
+El scope es el **nombre del servicio** afectado:
+- `user-service`, `auth-service`, `storage-service`, `cat-service`
+- `gateway-service`, `notification-service`, `adoption-service`, `form-analysis-service`
+
+Para cambios transversales que afectan a varios servicios, se puede omitir el scope o usar un concepto (`security`, `deps`).
+
+#### Ejemplos del historial real
+
+**Nuevas funcionalidades (feat):**
+```
 feat(user-service): domain layer
+feat(user-service): application layer
+feat(user-service): gRPC server
+feat(auth-service): domain layer
+feat(cat-service): application layer
+feat(storage-service): S3/MinIO file storage
+feat(gateway-service): JWT auth filter + routing config
+feat(gateway-service): Vert.x WebClient config
+feat(gateway-service): reverse proxy implementation
+feat(notification-service): email verification on registration
+feat(adoption-service): bootstrap microservice and define domain entities
+feat(adoption-service): implement core business logic and kafka integration
+feat(form-analysis-service): implement automated form analysis rules
+feat(security): JWT authentication
+```
+
+**Tests:**
+```
+test(user-service): add unit tests for user service
+test(auth-service): add integration tests for login, refresh and logout endpoints
+test(cat-service): add integration tests for cat CRUD endpoints
+test(storage-service): add integration tests for file upload with MinIO testcontainer
+test(gateway-service): add integration tests for routing and JWT filter
+test(notification-service): add integration tests for activation email consumer
+test(notification-service): implement unit tests for UserRegisteredConsumer
+test(adoption-service): implement unit tests for adoption service logic
+test(rules): Add unit tests for FormAnalysisRules
+```
+
+**Refactors:**
+```
+refactor(auth): Delegate access token generation to JwtTokenService
+refactor(user-service): introduce email and activation token value objects
+refactor(adoption-service): restructure adoption form for legal contracts
+```
+
+**Fixes:**
+```
+fix(user-service): align test assertions with actual HTTP response codes
+fix(gateway-service): multipart support in proxy
+fix(gateway-service): public file routes, logging, CORS for Vite
+fix(adoption-service): map JAX-RS NotFoundException to 404 status
+fix(adoption-service): use programmatic transaction for form analysis consumer
+```
+
+**Documentación:**
+```
+docs: add BITACORA.md with full project context
+docs: document integration tests in BITACORA and README
+docs: document unit tests and JwtTokenService refactor
+docs: session 2026-04-14 — testing strategy, Value Objects, DDD decisions
+docs(README): add table of contents
+docs(BITACORA): gateway-service implementation details
+```
+
+**Chore/Build:**
+```
 chore: project scaffold
+chore(gateway-service): scaffold
+chore: add Kafka, Zookeeper and Kafka UI to docker-compose
+chore: add MailHog for email testing
+build(deps): Add Mockito JUnit Jupiter dependency
+build(form-analysis-service): inherit configuration from parent pom
+```
+
+#### Buenas prácticas
+
+1. **Commits atómicos**: un commit = un cambio lógico completo
+2. **Scope por servicio**: siempre incluir el servicio modificado
+3. **Agrupación por capa**: `domain layer` → `application layer` → `integration`
+4. **Tests separados**: commits de tests aparte de los de implementación
+5. **Primera letra minúscula** en la descripción (excepto nombres propios)
+6. **Sin punto final** en el mensaje
+7. **Imperativo**: "add", "implement", "fix", no "added", "implements", "fixes"
+
+#### Patrones comunes de agrupación
+
+Para un nuevo servicio:
+```
+chore(<servicio>): scaffold
+feat(<servicio>): domain layer
+feat(<servicio>): application layer
+feat(<servicio>): REST API / gRPC server
+test(<servicio>): add unit tests
+test(<servicio>): add integration tests
+```
+
+Para una nueva feature en servicio existente:
+```
+feat(<servicio>): <descripción de la feature>
+test(<servicio>): add tests for <feature>
+docs: document <feature> in BITACORA
 ```
 
 ---
@@ -866,7 +1116,9 @@ CREATE SCHEMA IF NOT EXISTS users;
 | storage-service | 2 | 6 | **8** |
 | gateway-service | 4 | — | **4** |
 | notification-service | 2 | 3 | **5** |
-| **Total** | **20** | **33** | **53** |
+| adoption-service | 9 | 20 | **29** |
+| form-analysis-service | 3 | 8 | **11** |
+| **Total** | **32** | **61** | **93** |
 
 ### Tests unitarios
 
@@ -980,8 +1232,6 @@ void whenUserRegistered_thenActivationEmailSent() {
 6. **`ban-service`** → sistema de baneo temporal/permanente con desbaneo automático via `@Scheduled`
 7. **`docker-compose.yml` de producción** → con todos los servicios
 8. **cat-service**: tests de imagen (upload/delete) con WireMock para StorageClient
-9. **adoption-service**: tests unitarios e integración pendientes
-10. **gateway-service**: añadir rutas para adoption-service
 
 ### Deuda técnica
 - `@JsonProperty` en todos los records de todos los servicios para deserialización correcta
@@ -994,8 +1244,9 @@ auth-service           ✅
 storage-service        ✅
 cat-service            ✅
 gateway-service        ✅
-notification-service   ✅ (email activación via Kafka)
+notification-service   ✅ (email activación + notificaciones adopción via Kafka, plantillas Qute)
 adoption-service       ✅ (proceso adopción, formulario screening, entrevistas, contratos, gastos)
+form-analysis-service  ✅ (análisis automático de formularios, reglas Critical/Warning/Notice)
 ban-service            📋 (baneo temporal/permanente, desbaneo via @Scheduled)
 ```
 
@@ -1099,6 +1350,41 @@ docker exec -it kittigram-postgres-1 psql -U kittigram -d kittigram -c "\dt cats
 ---
 
 ## Historial de Sesiones
+
+### Sesión 2026-04-16
+
+**Bloque 1 — adoption-service completado**
+- Tests unitarios (20) e integración (9) implementados: 29 en total, BUILD SUCCESS.
+- `AdoptionService` cubierto con Mockito: flujo completo de creación, envío de formulario, análisis externo, entrevista, contrato.
+- Tests de integración con `@QuarkusTest`: PostgreSQL DevServices, Kafka InMemoryConnector, JWT de test.
+- `GlobalExceptionMapper` actualizado para capturar `jakarta.ws.rs.NotFoundException` (ver Problema #12).
+- Rutas de `adoption-service` (8086) añadidas al `gateway-service`.
+
+**Bloque 2 — form-analysis-service**
+- Nuevo microservicio creado desde cero con su propio esquema BD (`form_analysis`).
+- Entidades: `FormAnalysis`, `FormFlag`. Enums: `AnalysisDecision` (ACCEPTED/REJECTED), `FlagSeverity` (CRITICAL/WARNING/NOTICE).
+- `FormAnalysisRules`: motor de reglas con tres categorías de severidad para evaluar el formulario de screening.
+- `FormAnalysisService`: consumer de `adoption-form-submitted`, aplica reglas, persiste resultados, publica `adoption-form-analysed`.
+- `FormAnalysisPersistenceService`: persistencia extraída en bean separado con `@WithTransaction` para compatibilidad con `@Incoming` (ver Problema #10 y #11).
+- 11 tests: 8 unitarios (reglas + service mockeando persistencia) + 3 integración (flujo end-to-end con InMemoryConnector).
+
+**Bloque 3 — notification-service refactorizado**
+- Integración de plantillas Qute (`quarkus-qute`): el email de activación se renderiza con una plantilla HTML en lugar de construir el HTML en Java.
+- Nuevo `AdoptionFormAnalysedConsumer`: consume `adoption-form-analysed` y envía email de resultado (aceptado/rechazado) con su plantilla Qute correspondiente. 3 plantillas HTML en total.
+- Tests unitarios actualizados para mockear `Template` y `TemplateInstance` con cadena `data()` (ver Problema #14).
+
+**Problemas encontrados en esta sesión**:
+- `init.sql` no se re-ejecuta si el volumen Docker ya existe → `docker compose down -v` (Problema #9)
+- `@Incoming` + `@WithTransaction` incompatibles → `Panache.withTransaction()` programático (Problema #10)
+- `Panache.withTransaction()` falla en tests con InMemoryConnector → bean de persistencia separado (Problema #11)
+- `GlobalExceptionMapper` no capturaba `jakarta.ws.rs.NotFoundException` (Problema #12)
+- Conflicto aparente de rutas `/adoptions/my` vs `/adoptions/{id}` → JAX-RS lo resuelve correctamente (Problema #13)
+- Template Qute no inyectable con `@InjectMocks` → mocks explícitos de `Template` y `TemplateInstance` (Problema #14)
+- `UserRegisteredEventDeserializer` no encontrado → `StringDeserializer` + `ObjectMapper` manual (Problema #15)
+
+**Estado al cierre**: 8 servicios implementados. 93 tests — BUILD SUCCESS en todos los módulos.
+
+---
 
 ### Sesión 2026-04-15
 
