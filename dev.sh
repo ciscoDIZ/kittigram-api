@@ -13,6 +13,7 @@ KNOWN_SERVICES=(
 )
 
 PIDS=()
+RUN_E2E=false
 
 cleanup() {
   echo ""
@@ -43,10 +44,38 @@ start_service() {
   PIDS+=($!)
 }
 
-if [[ $# -eq 0 ]]; then
+wait_for_stack() {
+  local ports=(8080 8081 8082 8083 8084 8085 8086 8087)
+  local expected=${#ports[@]}
+  echo "Waiting for all $expected services to be ready..."
+  for i in $(seq 1 60); do
+    local up=0
+    for port in "${ports[@]}"; do
+      code=$(curl -s -o /dev/null -w "%{http_code}" --max-time 2 "http://localhost:$port/q/health/live" 2>/dev/null)
+      [[ "$code" == "200" ]] && up=$((up + 1))
+    done
+    echo "  [$i/60] $up/$expected ready"
+    [[ "$up" -eq "$expected" ]] && return 0
+    sleep 10
+  done
+  echo "Timed out waiting for stack." >&2
+  return 1
+}
+
+# Parse arguments: optional --e2e flag and optional service list
+SERVICE_ARG=""
+for arg in "$@"; do
+  if [[ "$arg" == "--e2e" ]]; then
+    RUN_E2E=true
+  else
+    SERVICE_ARG="$arg"
+  fi
+done
+
+if [[ -z "$SERVICE_ARG" ]]; then
   SERVICES=("${KNOWN_SERVICES[@]}")
 else
-  IFS=',' read -ra REQUESTED <<< "$1"
+  IFS=',' read -ra REQUESTED <<< "$SERVICE_ARG"
 
   for svc in "${REQUESTED[@]}"; do
     if ! is_known_service "$svc"; then
@@ -67,5 +96,15 @@ echo "Starting services: ${SERVICES[*]}"
 for svc in "${SERVICES[@]}"; do
   start_service "$svc"
 done
+
+if $RUN_E2E; then
+  wait_for_stack
+  echo ""
+  echo "Running e2e tests..."
+  mvn test -Pe2e -pl e2e-tests
+  E2E_EXIT=$?
+  cleanup
+  exit $E2E_EXIT
+fi
 
 wait
