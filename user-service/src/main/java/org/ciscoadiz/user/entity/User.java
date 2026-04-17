@@ -28,6 +28,8 @@ public class User extends PanacheEntity {
     public UserRole role;
     @Column(unique = true)
     public String activationToken;
+    @Column
+    public LocalDateTime activationTokenExpiresAt;
     @Column(nullable = false, updatable = false )
     public LocalDateTime createdAt;
     @Column(nullable = false)

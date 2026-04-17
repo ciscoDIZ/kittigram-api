@@ -121,8 +121,13 @@ public class UserService {
                 .onItem().ifNull()
                 .failWith(() -> new InvalidTokenException("Invalid or expired activation token"))
                 .onItem().transformToUni(user -> {
+                    if (user.activationTokenExpiresAt != null &&
+                            user.activationTokenExpiresAt.isBefore(java.time.LocalDateTime.now())) {
+                        return Uni.createFrom().failure(new InvalidTokenException("Invalid or expired activation token"));
+                    }
                     user.status = UserStatus.Active;
                     user.activationToken = null;
+                    user.activationTokenExpiresAt = null;
                     return userRepository.persist(user);
                 })
                 .onItem().transform(userMapper::toResponse);

@@ -8,6 +8,7 @@ import org.ciscoadiz.user.entity.User;
 import org.ciscoadiz.user.entity.UserRole;
 import org.ciscoadiz.user.entity.UserStatus;
 
+import java.time.LocalDateTime;
 import java.util.UUID;
 
 @ApplicationScoped
@@ -22,6 +23,7 @@ public class UserMapper {
         user.status = UserStatus.Pending;
         user.role = request.role() != null ? request.role() : UserRole.User;
         user.activationToken = UUID.randomUUID().toString();
+        user.activationTokenExpiresAt = LocalDateTime.now().plusHours(24);
         return user;
     }
 
