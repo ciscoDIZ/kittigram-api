@@ -1,18 +1,49 @@
 package org.ciscoadiz.gateway.resource;
 
 import io.smallrye.mutiny.Uni;
+import jakarta.annotation.security.PermitAll;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.Context;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 import org.ciscoadiz.gateway.proxy.ProxyService;
+import org.ciscoadiz.gateway.ratelimit.RateLimitedProxy;
 
 @Path("/api")
 public class GatewayResource {
 
     @Inject
     ProxyService proxyService;
+
+    @Inject
+    RateLimitedProxy rateLimitedProxy;
+
+    @POST
+    @Path("/auth/login")
+    @PermitAll
+    public Uni<Response> login(@Context HttpHeaders headers, byte[] body) {
+        return rateLimitedProxy.proxyLogin(body,
+                headers.getHeaderString("Authorization"),
+                headers.getHeaderString("Content-Type"));
+    }
+
+    @POST
+    @Path("/auth/refresh")
+    @PermitAll
+    public Uni<Response> refresh(@Context HttpHeaders headers, byte[] body) {
+        return rateLimitedProxy.proxyRefresh(body,
+                headers.getHeaderString("Authorization"),
+                headers.getHeaderString("Content-Type"));
+    }
+
+    @POST
+    @Path("/storage/upload")
+    public Uni<Response> storageUpload(@Context HttpHeaders headers, byte[] body) {
+        return rateLimitedProxy.proxyStorageUpload(body,
+                headers.getHeaderString("Authorization"),
+                headers.getHeaderString("Content-Type"));
+    }
 
     @GET
     @Path("/{path: .+}")
