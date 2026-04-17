@@ -35,7 +35,7 @@ class SecurityE2E {
 
     @BeforeAll
     static void setup() throws Exception {
-        RestAssured.baseURI = E2EConfig.GATEWAY_URL;
+        E2EConfig.waitForStack();
         MailHogClient.deleteAll();
 
         // Register and activate User

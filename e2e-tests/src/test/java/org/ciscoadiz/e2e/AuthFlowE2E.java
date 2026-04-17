@@ -1,6 +1,5 @@
 package org.ciscoadiz.e2e;
 
-import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
 import org.ciscoadiz.e2e.support.E2EConfig;
@@ -27,7 +26,7 @@ class AuthFlowE2E {
 
     @BeforeAll
     static void setup() {
-        RestAssured.baseURI = E2EConfig.GATEWAY_URL;
+        E2EConfig.waitForStack();
         MailHogClient.deleteAll();
 
         // Register main user

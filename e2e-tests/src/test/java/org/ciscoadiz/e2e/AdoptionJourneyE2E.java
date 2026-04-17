@@ -2,10 +2,8 @@ package org.ciscoadiz.e2e;
 
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import io.restassured.RestAssured;
 import io.restassured.http.ContentType;
 import io.restassured.response.Response;
-import org.awaitility.Awaitility;
 import org.ciscoadiz.e2e.support.E2EConfig;
 import org.ciscoadiz.e2e.support.MailHogClient;
 import org.junit.jupiter.api.*;
@@ -14,7 +12,6 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Base64;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
@@ -40,16 +37,8 @@ class AdoptionJourneyE2E {
     private static Long adoptionId;
 
     @BeforeAll
-    static void waitForStack() {
-        RestAssured.baseURI = E2EConfig.GATEWAY_URL;
-        Awaitility.await()
-                .atMost(60, TimeUnit.SECONDS)
-                .pollInterval(2, TimeUnit.SECONDS)
-                .ignoreExceptions()
-                .until(() -> {
-                    int status = RestAssured.get("/api/cats").statusCode();
-                    return status == 200 || status == 204;
-                });
+    static void setup() {
+        E2EConfig.waitForStack();
         MailHogClient.deleteAll();
     }
 
