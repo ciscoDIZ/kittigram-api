@@ -1,7 +1,8 @@
 package org.ciscoadiz.auth.dto;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
+import jakarta.validation.constraints.NotBlank;
 
 public record LogoutRequest(
-        @JsonProperty("refreshToken") String refreshToken
+        @NotBlank @JsonProperty("refreshToken") String refreshToken
 ) {}

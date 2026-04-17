@@ -5,6 +5,7 @@ import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
 import jakarta.annotation.security.PermitAll;
 import jakarta.inject.Inject;
+import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
@@ -46,7 +47,7 @@ public class CatResource {
     }
 
     @POST
-    public Uni<Response> createCat(CatCreateRequest request) {
+    public Uni<Response> createCat(@Valid CatCreateRequest request) {
         return catService.createCat(request, getUserId())
                 .onItem().transform(cat -> Response.status(Response.Status.CREATED)
                         .entity(cat).build());
@@ -56,7 +57,7 @@ public class CatResource {
     @Path("/{id}")
     public Uni<Response> updateCat(
             @PathParam("id") Long id,
-            CatUpdateRequest request) {
+            @Valid CatUpdateRequest request) {
         return catService.updateCat(id, request, getUserId())
                 .onItem().transform(cat -> Response.ok(cat).build());
     }

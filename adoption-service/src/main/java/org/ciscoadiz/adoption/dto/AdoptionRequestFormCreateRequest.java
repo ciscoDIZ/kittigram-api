@@ -1,45 +1,49 @@
 package org.ciscoadiz.adoption.dto;
 
+import jakarta.validation.constraints.Max;
+import jakarta.validation.constraints.Min;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import org.ciscoadiz.adoption.entity.ActivityLevel;
 import org.ciscoadiz.adoption.entity.HousingType;
 
 public record AdoptionRequestFormCreateRequest(
         // Sección 1: Perfil del adoptante
-        Boolean hasPreviousCatExperience,
+        @NotNull Boolean hasPreviousCatExperience,
         String previousPetsHistory,
-        Integer adultsInHousehold,
-        Boolean hasChildren,
+        @NotNull @Min(1) Integer adultsInHousehold,
+        @NotNull Boolean hasChildren,
         String childrenAges,
-        Boolean hasOtherPets,
+        @NotNull Boolean hasOtherPets,
         String otherPetsDescription,
-        Integer hoursAlonePerDay,
-        Boolean stableHousing,
+        @NotNull @Min(0) @Max(24) Integer hoursAlonePerDay,
+        @NotNull Boolean stableHousing,
         String housingInstabilityReason,
 
         // Sección 2: La vivienda
-        HousingType housingType,
-        Integer housingSize,
-        Boolean hasOutdoorAccess,
-        Boolean isRental,
+        @NotNull HousingType housingType,
+        @NotNull @Min(1) Integer housingSize,
+        @NotNull Boolean hasOutdoorAccess,
+        @NotNull Boolean isRental,
         Boolean rentalPetsAllowed,
-        Boolean hasWindowsWithView,
-        Boolean hasVerticalSpace,
-        Boolean hasHidingSpots,
-        ActivityLevel householdActivityLevel,
+        @NotNull Boolean hasWindowsWithView,
+        @NotNull Boolean hasVerticalSpace,
+        @NotNull Boolean hasHidingSpots,
+        @NotNull ActivityLevel householdActivityLevel,
 
         // Sección 3: Comportamiento felino
-        String whyCatsNeedToPlay,
-        Integer dailyPlayMinutes,
-        String plannedEnrichment,
-        String reactionToUnwantedBehavior,
-        Boolean hasScratchingPost,
-        Boolean willingToEnrichEnvironment,
+        @NotBlank String whyCatsNeedToPlay,
+        @NotNull @Min(0) Integer dailyPlayMinutes,
+        @NotBlank String plannedEnrichment,
+        @NotBlank String reactionToUnwantedBehavior,
+        @NotNull Boolean hasScratchingPost,
+        @NotNull Boolean willingToEnrichEnvironment,
 
         // Sección 4: Compromiso
-        String motivationToAdopt,
-        Boolean understandsLongTermCommitment,
-        Boolean hasVetBudget,
-        Boolean allHouseholdMembersAgree,
-        Boolean anyoneHasAllergies,
+        @NotBlank String motivationToAdopt,
+        @NotNull Boolean understandsLongTermCommitment,
+        @NotNull Boolean hasVetBudget,
+        @NotNull Boolean allHouseholdMembersAgree,
+        @NotNull Boolean anyoneHasAllergies,
         String allergiesDetail
 ) {}

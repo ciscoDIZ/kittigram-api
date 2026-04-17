@@ -1,15 +1,18 @@
 package org.ciscoadiz.adoption.dto;
 
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+
 public record AdoptionFormCreateRequest(
-        String fullName,
-        String idNumber,
-        String phone,
-        String address,
-        String city,
-        String postalCode,
-        Boolean acceptsVetVisits,
-        Boolean acceptsFollowUpContact,
-        Boolean acceptsReturnIfNeeded,
-        Boolean acceptsTermsAndConditions,
+        @NotBlank String fullName,
+        @NotBlank String idNumber,
+        @NotBlank String phone,
+        @NotBlank String address,
+        @NotBlank String city,
+        @NotBlank String postalCode,
+        @NotNull Boolean acceptsVetVisits,
+        @NotNull Boolean acceptsFollowUpContact,
+        @NotNull Boolean acceptsReturnIfNeeded,
+        @NotNull Boolean acceptsTermsAndConditions,
         String additionalNotes
 ) {}

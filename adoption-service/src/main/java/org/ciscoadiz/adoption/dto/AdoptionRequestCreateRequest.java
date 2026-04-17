@@ -1,6 +1,8 @@
 package org.ciscoadiz.adoption.dto;
 
+import jakarta.validation.constraints.NotNull;
+
 public record AdoptionRequestCreateRequest(
-        Long catId,
-        Long organizationId
+        @NotNull Long catId,
+        @NotNull Long organizationId
 ) {}

@@ -5,6 +5,7 @@ import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
 import jakarta.annotation.security.PermitAll;
 import jakarta.inject.Inject;
+import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.*;
 import org.ciscoadiz.user.dto.UserCreateRequest;
@@ -41,7 +42,7 @@ public class UserResource {
 
     @POST
     @PermitAll
-    public Uni<Response> createUser(UserCreateRequest request, @Context UriInfo uriInfo) {
+    public Uni<Response> createUser(@Valid UserCreateRequest request, @Context UriInfo uriInfo) {
         return userService.createUser(request).onItem().transform(user -> {
            var location = uriInfo.getAbsolutePathBuilder().path(user.email()).build();
            return Response.created(location).entity(user).build();
