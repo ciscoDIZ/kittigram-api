@@ -9,6 +9,7 @@ KNOWN_SERVICES=(
   storage-service
   notification-service
   adoption-service
+  form-analysis-service
 )
 
 PIDS=()
