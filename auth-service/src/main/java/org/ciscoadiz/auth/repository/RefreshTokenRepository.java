@@ -2,18 +2,15 @@ package org.ciscoadiz.auth.repository;
 
 import io.quarkus.hibernate.reactive.panache.PanacheRepository;
 import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
-import io.quarkus.logging.Log;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import org.ciscoadiz.auth.entity.RefreshToken;
-import org.jboss.logging.Logger;
 
 
 @ApplicationScoped
 public class RefreshTokenRepository implements PanacheRepository<RefreshToken> {
     @WithTransaction
     public Uni<RefreshToken> findByToken(String token) {
-        Log.infof("Looking for token: '%s'", token);
         return find("token", token).firstResult();
     }
 
