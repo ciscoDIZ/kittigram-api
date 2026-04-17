@@ -55,6 +55,20 @@ public class GatewayResource {
         );
     }
 
+    @PATCH
+    @Path("/{path: .+}")
+    public Uni<Response> patch(@PathParam("path") String path,
+                               @Context HttpHeaders headers,
+                               byte[] body) {
+        return proxyService.proxy(
+                "PATCH",
+                "/api/" + path,
+                body,
+                headers.getHeaderString("Authorization"),
+                headers.getHeaderString("Content-Type")
+        );
+    }
+
     @DELETE
     @Path("/{path: .+}")
     public Uni<Response> delete(@PathParam("path") String path,

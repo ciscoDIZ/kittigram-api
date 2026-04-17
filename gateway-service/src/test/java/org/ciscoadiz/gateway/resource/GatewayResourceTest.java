@@ -86,4 +86,31 @@ class GatewayResourceTest {
                 .then()
                 .statusCode(401);
     }
+
+    @Test
+    void testPatchWithoutTokenReturnsUnauthorized() {
+        given()
+                .contentType(ContentType.JSON)
+                .body("{\"status\":\"Accepted\"}")
+                .when()
+                .patch("/api/adoptions/1/status")
+                .then()
+                .statusCode(401);
+    }
+
+    @Test
+    void testAdoptionsPathStrippedCorrectly() {
+        wiremock.register(get(urlEqualTo("/adoptions/1"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("{\"id\":1}")));
+
+        given()
+                .header("Authorization", "Bearer test-token")
+                .when()
+                .get("/api/adoptions/1")
+                .then()
+                .statusCode(200);
+    }
 }

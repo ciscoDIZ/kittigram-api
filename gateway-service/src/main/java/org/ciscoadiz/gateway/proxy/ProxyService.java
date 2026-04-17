@@ -40,7 +40,7 @@ public class ProxyService {
             );
         }
 
-        String targetPath = path.replaceFirst("/api/(auth|users|cats|storage)", "/$1");
+        String targetPath = path.replaceFirst("^/api", "");
         Log.infof("Proxying %s %s → %s%s", method, path, targetUrl, targetPath);
         var request = webClient.requestAbs(
                 io.vertx.core.http.HttpMethod.valueOf(method),
