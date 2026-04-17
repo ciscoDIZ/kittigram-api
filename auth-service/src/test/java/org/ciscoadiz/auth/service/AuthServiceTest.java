@@ -48,6 +48,7 @@ class AuthServiceTest {
         validRefreshToken.token = UUID.randomUUID().toString();
         validRefreshToken.userId = 1L;
         validRefreshToken.email = "test@kittigram.org";
+        validRefreshToken.role = "User";
         validRefreshToken.expiresAt = LocalDateTime.now().plusDays(7);
         validRefreshToken.revoked = false;
     }
@@ -62,9 +63,10 @@ class AuthServiceTest {
                                 .setValid(true)
                                 .setUserId(1L)
                                 .setEmail("test@kittigram.org")
+                                .setRole("User")
                                 .build()
                 ));
-        when(jwtTokenService.generateAccessToken(1L, "test@kittigram.org"))
+        when(jwtTokenService.generateAccessToken(1L, "test@kittigram.org", "User"))
                 .thenReturn("mocked-access-token");
         when(refreshTokenRepository.persist(any(RefreshToken.class)))
                 .thenReturn(Uni.createFrom().item(validRefreshToken));
@@ -75,7 +77,7 @@ class AuthServiceTest {
         assertNotNull(result);
         assertEquals("mocked-access-token", result.accessToken());
         assertNotNull(result.refreshToken());
-        verify(jwtTokenService).generateAccessToken(1L, "test@kittigram.org");
+        verify(jwtTokenService).generateAccessToken(1L, "test@kittigram.org", "User");
     }
 
     @Test
@@ -102,7 +104,7 @@ class AuthServiceTest {
 
         when(refreshTokenRepository.findByToken(validRefreshToken.token))
                 .thenReturn(Uni.createFrom().item(validRefreshToken));
-        when(jwtTokenService.generateAccessToken(1L, "test@kittigram.org"))
+        when(jwtTokenService.generateAccessToken(1L, "test@kittigram.org", "User"))
                 .thenReturn("new-access-token");
         when(refreshTokenRepository.persist(any(RefreshToken.class)))
                 .thenReturn(Uni.createFrom().item(validRefreshToken));

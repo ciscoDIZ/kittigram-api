@@ -22,6 +22,9 @@ public class RefreshToken extends PanacheEntity {
     public String email;
 
     @Column(nullable = false)
+    public String role;
+
+    @Column(nullable = false)
     public LocalDateTime expiresAt;
 
     @Column(nullable = false)
