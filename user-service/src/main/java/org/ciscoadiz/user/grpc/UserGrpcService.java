@@ -29,6 +29,7 @@ public class UserGrpcService implements UserService {
                             .setUserId(user.id)
                             .setEmail(user.email)
                             .setStatus(user.status.name())
+                            .setRole(user.role.name())
                             .build();
                 });
     }

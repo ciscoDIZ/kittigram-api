@@ -2,6 +2,7 @@ package org.ciscoadiz.adoption.resource;
 
 import io.quarkus.security.Authenticated;
 import io.smallrye.mutiny.Uni;
+import jakarta.annotation.security.RolesAllowed;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
@@ -25,6 +26,7 @@ public class AdoptionResource {
     JsonWebToken jwt;
 
     @POST
+    @RolesAllowed("User")
     public Uni<Response> createAdoptionRequest(AdoptionRequestCreateRequest request) {
         Long adopterId = Long.parseLong(jwt.getSubject());
         String adopterEmail = jwt.getClaim("email");
@@ -41,6 +43,7 @@ public class AdoptionResource {
 
     @GET
     @Path("/my")
+    @RolesAllowed("User")
     public Uni<List<AdoptionRequestResponse>> findMyAdoptions() {
         Long adopterId = Long.parseLong(jwt.getSubject());
         return adoptionService.findByAdopterId(adopterId);
@@ -48,6 +51,7 @@ public class AdoptionResource {
 
     @GET
     @Path("/organization")
+    @RolesAllowed("Organization")
     public Uni<List<AdoptionRequestResponse>> findByOrganization() {
         Long organizationId = Long.parseLong(jwt.getSubject());
         return adoptionService.findByOrganizationId(organizationId);
@@ -55,6 +59,7 @@ public class AdoptionResource {
 
     @PATCH
     @Path("/{id}/status")
+    @RolesAllowed("Organization")
     public Uni<AdoptionRequestResponse> updateStatus(
             @PathParam("id") Long id,
             AdoptionStatusUpdateRequest request) {
@@ -64,6 +69,7 @@ public class AdoptionResource {
 
     @POST
     @Path("/{id}/form")
+    @RolesAllowed("User")
     public Uni<Response> submitRequestForm(
             @PathParam("id") Long id,
             AdoptionRequestFormCreateRequest request) {
@@ -74,6 +80,7 @@ public class AdoptionResource {
 
     @POST
     @Path("/{id}/interview")
+    @RolesAllowed("Organization")
     public Uni<Response> scheduleInterview(
             @PathParam("id") Long id,
             InterviewCreateRequest request) {
@@ -84,6 +91,7 @@ public class AdoptionResource {
 
     @POST
     @Path("/{id}/adoption-form")
+    @RolesAllowed("User")
     public Uni<Response> submitAdoptionForm(
             @PathParam("id") Long id,
             AdoptionFormCreateRequest request) {

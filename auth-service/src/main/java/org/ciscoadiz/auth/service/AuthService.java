@@ -42,7 +42,7 @@ public class AuthService {
                                 new InvalidCredentialsException()
                         );
                     }
-                    return generateTokens(response.getUserId(), response.getEmail());
+                    return generateTokens(response.getUserId(), response.getEmail(), response.getRole());
                 });
     }
 
@@ -57,7 +57,7 @@ public class AuthService {
                                 new InvalidTokenException("Refresh token expired or revoked")
                         );
                     }
-                    return generateTokens(token.userId, token.email);
+                    return generateTokens(token.userId, token.email, token.role);
                 });
     }
 
@@ -72,13 +72,14 @@ public class AuthService {
                 });
     }
 
-    private Uni<AuthResponse> generateTokens(long userId, String email) {
-        String accessToken = jwtTokenService.generateAccessToken(userId, email);
+    private Uni<AuthResponse> generateTokens(long userId, String email, String role) {
+        String accessToken = jwtTokenService.generateAccessToken(userId, email, role);
 
         RefreshToken refreshToken = new RefreshToken();
         refreshToken.token = UUID.randomUUID().toString();
         refreshToken.userId = userId;
         refreshToken.email = email;
+        refreshToken.role = role;
         refreshToken.expiresAt = LocalDateTime.now().plusDays(7);
 
         return refreshTokenRepository.persist(refreshToken)
