@@ -39,6 +39,11 @@
 - `"order"` es palabra reservada HQL → usar `imageOrder` con `@Column(name = "image_order")`.
 - Copiar el `.proto` en `src/main/proto/` de cada servicio que lo necesite. No compartir módulo Maven.
 - Borrado de usuarios: lógico (status → Inactive), nunca físico.
+- `ProxyService` explota con NPE si la respuesta upstream no tiene body (ej. 204). Siempre guardar `r.body() != null`.
+- `JwtAuthFilter` tiene una lista explícita de rutas públicas (`PUBLIC_EXACT`). Añadir ahí cualquier endpoint nuevo que no requiera Bearer token.
+- El rate limiter (`IpRateLimiter`) usa email como clave para login y IP para el resto. No cambiar a global o los tests se contaminarán entre sí.
+- Kafka EXTERNAL listener debe vincularse a `0.0.0.0` dentro del contenedor, no a `127.0.0.1` (Docker no redirige al loopback del contenedor).
+- `MailHogClient.extractActivationToken` espera el body decodificado de Quoted-Printable. Los emails HTML llegan con soft line breaks (`=\n`) y `=3D` en lugar de `=`.
 
 ## Comportamiento esperado
 - **Compilar solo el módulo afectado**: `mvn compile -pl <módulo>` o `mvn test -pl <módulo>`.

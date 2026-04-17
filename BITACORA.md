@@ -1572,3 +1572,33 @@ docker exec -it kittigram-postgres-1 psql -U kittigram -d kittigram -c "\dt cats
 - GitKraken AI configurado (250k tokens/semana, Gemini Flash) con Conventional Commits y Commit Composer.
 
 **Estado al cierre**: 53 tests en total (20 integración + 33 unitarios) distribuidos en 6 servicios.
+---
+
+### Sesión 2026-04-17
+
+**Contexto**: primera ejecución real del stack completo + suite e2e.
+
+**Bloque 1 — Infraestructura**
+- PostgreSQL: contraseña del contenedor desincronizada con el valor por defecto de la app (`kittigram`). Corregido con `ALTER USER` y `.env` actualizado.
+- Kafka: listener `EXTERNAL` estaba vinculado a `127.0.0.1` dentro del contenedor. Docker reenvía tráfico a la IP del contenedor, no a su loopback → todos los servicios recibían disconnects en bootstrap. Cambiado a `0.0.0.0:9092`.
+- `dev.sh`: faltaba `form-analysis-service` en `KNOWN_SERVICES`. Sin él, el topic `adoption-form-analysed` nunca recibía mensajes y `notification-service` no enviaba emails de adopción.
+
+**Bloque 2 — Bugs de producción (detectados por e2e)**
+
+*auth-service*
+- Token rotation no implementada: `AuthService.refresh()` generaba nuevos tokens pero nunca revocaba el antiguo. El token viejo permanecía válido indefinidamente. Fix: `token.revoked = true` + `persist` antes de `generateTokens`.
+
+*gateway-service*
+- `JwtAuthFilter` tenía lista de rutas públicas hardcodeada sin `POST:/api/auth/logout` → logout devolvía 401 sin Bearer token.
+- `ProxyService` lanzaba NPE al recibir respuesta sin body (ej. 204 No Content de logout): `r.body().getBytes()` sin guardar nulo.
+- Rate limiter (`@RateLimit` de SmallRye) era global por instancia JVM, no por cliente. Reemplazado por `IpRateLimiter` con ventana deslizante por email (login) o IP (refresh, upload). Los límites pasan a leerse de `application.properties` vía `@ConfigProperty`.
+
+**Bloque 3 — Fixes de tests e2e**
+- `MailHogClient`: emails HTML llegan en Quoted-Printable. El regex de extracción de token fallaba por soft line breaks (`=\n`) y `=3D`. Fix: strip + decode antes de aplicar el patrón.
+- `AdoptionJourneyE2E`: `Map.of` no acepta valores `null` → eliminadas las entradas opcionales nulas del formulario de screening.
+- `ActivationRequest` record sin `@JsonProperty` → Jackson no deserializaba el campo `token` correctamente.
+
+**Bloque 4 — Tooling**
+- `CLAUDE.md` reescrito como referencia autocontenida (stack, puertos, patrones, gotchas, comportamiento esperado). Eliminada dependencia de `~/.agents/technologies/kittigram.md` que no existía.
+
+**Estado al cierre**: 33/33 tests e2e verdes. 6 commits atómicos mergeados a `main`.
