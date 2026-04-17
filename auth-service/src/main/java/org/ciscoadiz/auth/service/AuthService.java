@@ -57,7 +57,9 @@ public class AuthService {
                                 new InvalidTokenException("Refresh token expired or revoked")
                         );
                     }
-                    return generateTokens(token.userId, token.email, token.role);
+                    token.revoked = true;
+                    return refreshTokenRepository.persist(token)
+                            .onItem().transformToUni(t -> generateTokens(t.userId, t.email, t.role));
                 });
     }
 
