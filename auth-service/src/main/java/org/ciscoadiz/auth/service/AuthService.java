@@ -1,7 +1,6 @@
 package org.ciscoadiz.auth.service;
 
 import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
-import io.quarkus.logging.Log;
 import io.smallrye.jwt.build.Jwt;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
@@ -49,7 +48,6 @@ public class AuthService {
 
     @WithTransaction
     public Uni<AuthResponse> refresh(RefreshRequest request) {
-        Log.infof("Refresh request token: '%s'", request.refreshToken());
         return refreshTokenRepository.findByToken(request.refreshToken())
                 .onItem().ifNull()
                 .failWith(() -> new InvalidTokenException("Refresh token not found"))
