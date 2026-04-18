@@ -30,6 +30,6 @@ public class OrganizationMember extends PanacheEntity {
     @PrePersist
     public void prePersist() {
         joinedAt = LocalDateTime.now();
-        if (status == null) status = MemberStatus.ACTIVE;
+        if (status == null) status = MemberStatus.Active;
     }
 }

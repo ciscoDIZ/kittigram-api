@@ -57,8 +57,8 @@ public class Organization extends PanacheEntity {
     public void prePersist() {
         createdAt = LocalDateTime.now();
         updatedAt = LocalDateTime.now();
-        status = OrganizationStatus.ACTIVE;
-        if (plan == null) plan = OrganizationPlan.FREE;
+        status = OrganizationStatus.Active;
+        if (plan == null) plan = OrganizationPlan.Free;
         maxMembers = plan.maxMembers;
     }
 
