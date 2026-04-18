@@ -187,6 +187,28 @@ class AdoptionJourneyE2E {
     }
 
     @Test @Order(10)
+    void adopterListsOwnAdoptions() {
+        given()
+            .header("Authorization", "Bearer " + adopterToken)
+        .when()
+            .get("/api/adoptions/my")
+        .then()
+            .statusCode(200)
+            .body("id", hasItem(adoptionId.intValue()));
+    }
+
+    @Test @Order(11)
+    void orgListsReceivedAdoptions() {
+        given()
+            .header("Authorization", "Bearer " + orgToken)
+        .when()
+            .get("/api/adoptions/organization")
+        .then()
+            .statusCode(200)
+            .body("id", hasItem(adoptionId.intValue()));
+    }
+
+    @Test @Order(12)
     void adopterViewsOwnAdoption() {
         given()
             .header("Authorization", "Bearer " + adopterToken)
@@ -197,7 +219,7 @@ class AdoptionJourneyE2E {
             .body("id", equalTo(adoptionId.intValue()));
     }
 
-    @Test @Order(11)
+    @Test @Order(13)
     void orgViewsAdoption() {
         given()
             .header("Authorization", "Bearer " + orgToken)
@@ -208,7 +230,7 @@ class AdoptionJourneyE2E {
             .body("id", equalTo(adoptionId.intValue()));
     }
 
-    @Test @Order(12)
+    @Test @Order(14)
     void submitScreeningForm() {
         given()
             .contentType(ContentType.JSON)
@@ -248,7 +270,7 @@ class AdoptionJourneyE2E {
             .statusCode(201);
     }
 
-    @Test @Order(13)
+    @Test @Order(15)
     void orgAcceptsAdoption() {
         given()
             .contentType(ContentType.JSON)
@@ -261,7 +283,7 @@ class AdoptionJourneyE2E {
             .body("status", equalTo("Accepted"));
     }
 
-    @Test @Order(14)
+    @Test @Order(16)
     void scheduleInterview() {
         String scheduledAt = LocalDateTime.now().plusDays(7)
                 .format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
@@ -278,7 +300,7 @@ class AdoptionJourneyE2E {
             .statusCode(201);
     }
 
-    @Test @Order(15)
+    @Test @Order(17)
     void submitLegalContract() {
         given()
             .contentType(ContentType.JSON)
@@ -301,7 +323,7 @@ class AdoptionJourneyE2E {
             .statusCode(201);
     }
 
-    @Test @Order(16)
+    @Test @Order(18)
     void refreshAdopterToken() {
         Response resp = given()
             .contentType(ContentType.JSON)
@@ -324,7 +346,7 @@ class AdoptionJourneyE2E {
 
     private static String oldRefreshToken;
 
-    @Test @Order(17)
+    @Test @Order(19)
     void oldRefreshTokenRejected() {
         given()
             .contentType(ContentType.JSON)
@@ -335,7 +357,7 @@ class AdoptionJourneyE2E {
             .statusCode(401);
     }
 
-    @Test @Order(18)
+    @Test @Order(20)
     void logout() {
         given()
             .contentType(ContentType.JSON)
