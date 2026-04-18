@@ -11,14 +11,14 @@ import java.util.List;
 @ApplicationScoped
 public class CatMapper {
 
-    public Cat toEntity(CatCreateRequest request, Long userId) {
+    public Cat toEntity(CatCreateRequest request) {
         Cat cat = new Cat();
         cat.name = request.name();
         cat.age = request.age();
         cat.sex = CatSex.valueOf(request.sex());
         cat.description = request.description();
         cat.neutered = request.neutered() != null ? request.neutered() : false;
-        cat.userId = userId;
+        cat.organizationId = request.organizationId();
         cat.city = request.city();
         cat.region = request.region();
         cat.country = request.country();
@@ -53,7 +53,7 @@ public class CatMapper {
                 cat.country,
                 cat.latitude,
                 cat.longitude,
-                cat.userId,
+                cat.organizationId,
                 images.stream().map(this::toImageResponse).toList(),
                 cat.createdAt,
                 cat.updatedAt

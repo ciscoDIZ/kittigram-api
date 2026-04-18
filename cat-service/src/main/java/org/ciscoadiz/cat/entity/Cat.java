@@ -31,8 +31,8 @@ public class Cat extends PanacheEntity {
     @Column
     public String profileImageUrl;
 
-    @Column(nullable = false)
-    public Long userId;
+    @Column(name = "organization_id", nullable = false)
+    public Long organizationId;
 
     @Column(nullable = false)
     public String city;

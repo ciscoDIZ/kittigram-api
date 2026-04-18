@@ -53,7 +53,7 @@ class CatServiceTest {
     void setUp() {
         testCat = new Cat();
         testCat.id = 1L;
-        testCat.userId = 10L;
+        testCat.organizationId = 10L;
         testCat.name = "Peluso";
         testCat.age = 2;
         testCat.city = "La Orotava";
@@ -62,7 +62,7 @@ class CatServiceTest {
         testCatResponse = new CatResponse(
                 1L, "Peluso", 2, "Male", null, true,
                 "Available", "La Orotava", "Tenerife", "España",
-                null, null, 10L, List.of(),
+                null, null, 10L, List.of(), // organizationId=10
                 LocalDateTime.now(), LocalDateTime.now()
         );
 
@@ -76,17 +76,17 @@ class CatServiceTest {
     @Test
     void createCat_success() {
         var request = new CatCreateRequest(
-                "Peluso", 2, "Male", null, true,
+                "Peluso", 2, "Male", null, true, 10L,
                 "La Orotava", "Tenerife", "España", null, null
         );
 
-        when(catMapper.toEntity(request, 10L)).thenReturn(testCat);
+        when(catMapper.toEntity(request)).thenReturn(testCat);
         when(catRepository.persist(any(Cat.class)))
                 .thenReturn(Uni.createFrom().item(testCat));
         when(catMapper.toResponse(testCat, List.of()))
                 .thenReturn(testCatResponse);
 
-        var result = catService.createCat(request, 10L)
+        var result = catService.createCat(request)
                 .await().indefinitely();
 
         assertNotNull(result);

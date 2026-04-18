@@ -37,7 +37,7 @@ public class CatRepository implements PanacheRepository<Cat> {
     }
 
     @WithSession
-    public Uni<List<Cat>> findByUserId(Long userId) {
-        return find("userId", userId).list();
+    public Uni<List<Cat>> findByOrganizationId(Long organizationId) {
+        return find("organizationId", organizationId).list();
     }
 }

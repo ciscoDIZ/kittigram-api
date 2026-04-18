@@ -36,19 +36,19 @@ public class CatService {
     StorageClient storageClient;
 
     @WithTransaction
-    public Uni<CatResponse> createCat(CatCreateRequest request, Long userId) {
-        Cat cat = catMapper.toEntity(request, userId);
+    public Uni<CatResponse> createCat(CatCreateRequest request) {
+        Cat cat = catMapper.toEntity(request);
         return catRepository.persist(cat)
                 .onItem().transform(saved -> catMapper.toResponse(saved, List.of()));
     }
 
     @WithTransaction
-    public Uni<CatResponse> updateCat(Long id, CatUpdateRequest request, Long userId) {
+    public Uni<CatResponse> updateCat(Long id, CatUpdateRequest request, Long organizationId) {
         return catRepository.findById(id)
                 .onItem().ifNull()
                 .failWith(() -> new CatNotFoundException(id))
                 .onItem().transformToUni(cat -> {
-                    requireOwner(cat, userId);
+                    requireOwner(cat, organizationId);
                     catMapper.updateEntity(cat, request);
                     return catRepository.persist(cat);
                 })
@@ -89,12 +89,12 @@ public class CatService {
     }
 
     @WithTransaction
-    public Uni<CatResponse> uploadImage(Long catId, FileUpload file, Long userId) {
+    public Uni<CatResponse> uploadImage(Long catId, FileUpload file, Long organizationId) {
         return catRepository.findById(catId)
                 .onItem().ifNull()
                 .failWith(() -> new CatNotFoundException(catId))
                 .onItem().transformToUni(cat -> {
-                    requireOwner(cat, userId);
+                    requireOwner(cat, organizationId);
                     return storageClient.upload(file)
                             .onItem().transformToUni(storage -> {
                                 CatImage image = new CatImage();
@@ -126,12 +126,12 @@ public class CatService {
     }
 
     @WithTransaction
-    public Uni<Void> deleteImage(Long catId, Long imageId, Long userId) {
+    public Uni<Void> deleteImage(Long catId, Long imageId, Long organizationId) {
         return catRepository.findById(catId)
                 .onItem().ifNull()
                 .failWith(() -> new CatNotFoundException(catId))
                 .onItem().transformToUni(cat -> {
-                    requireOwner(cat, userId);
+                    requireOwner(cat, organizationId);
                     return catImageRepository.findById(imageId)
                             .onItem().ifNull()
                             .failWith(() -> new CatNotFoundException(imageId))
@@ -143,12 +143,12 @@ public class CatService {
     }
 
     @WithTransaction
-    public Uni<Void> deleteCat(Long id, Long userId) {
+    public Uni<Void> deleteCat(Long id, Long organizationId) {
         return catRepository.findById(id)
                 .onItem().ifNull()
                 .failWith(() -> new CatNotFoundException(id))
                 .onItem().transformToUni(cat -> {
-                    requireOwner(cat, userId);
+                    requireOwner(cat, organizationId);
                     return catImageRepository.findByCatId(id)
                             .collect().asList()
                             .onItem().transformToUni(images ->
@@ -167,8 +167,8 @@ public class CatService {
                 });
     }
 
-    private void requireOwner(Cat cat, Long userId) {
-        if (!cat.userId.equals(userId)) {
+    private void requireOwner(Cat cat, Long organizationId) {
+        if (!cat.organizationId.equals(organizationId)) {
             throw new ForbiddenException("Access denied");
         }
     }

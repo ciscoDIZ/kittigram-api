@@ -30,6 +30,9 @@ public class ProxyService {
     @ConfigProperty(name = "quarkus.rest-client.adoption-service.url")
     String adoptionServiceUrl;
 
+    @ConfigProperty(name = "quarkus.rest-client.organization-service.url")
+    String organizationServiceUrl;
+
     public Uni<Response> proxy(String method, String path,
                                byte[] body, String authHeader,
                                String contentType) {
@@ -77,6 +80,7 @@ public class ProxyService {
         if (path.startsWith("/api/cats")) return catServiceUrl;
         if (path.startsWith("/api/storage")) return storageServiceUrl;
         if (path.startsWith("/api/adoptions")) return adoptionServiceUrl;
+        if (path.startsWith("/api/organizations")) return organizationServiceUrl;
         return null;
     }
 }

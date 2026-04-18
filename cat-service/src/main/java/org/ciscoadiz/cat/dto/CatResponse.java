@@ -16,7 +16,7 @@ public record CatResponse(
         String country,
         Double latitude,
         Double longitude,
-        Long userId,
+        Long organizationId,
         List<CatImageResponse> images,
         LocalDateTime createdAt,
         LocalDateTime updatedAt
