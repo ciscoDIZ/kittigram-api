@@ -28,6 +28,7 @@
         <module>notification-service</module>
         <module>adoption-service</module>
         <module>form-analysis-service</module>
+        <module>organization-service</module>
     </modules>
 
     <dependencyManagement>
