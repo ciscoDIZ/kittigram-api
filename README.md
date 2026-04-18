@@ -458,10 +458,12 @@ Copy `.env.example` to `.env` and fill in all values. Variables marked **require
 ### Core
 
 - [x] All services implemented with full adoption workflow
-- [x] Integration and unit tests for all services (93 total)
+- [x] Integration and unit tests for all services (113 total)
 - [x] Value Objects (`Email`, `ActivationToken`)
 - [x] User roles (`User`, `Organization`, `Admin`)
 - [x] Security audit completed (11 vulnerabilities found and fixed, score 5.5 → 8.5/10)
+- [x] JaCoCo configured across all modules (quarkus-jacoco + maven plugin in root pom)
+- [x] gateway-service instruction coverage at 100% (574/574); branch coverage 93.5% (4 unreachable branches in Vert.x WebClient code)
 - [ ] **Flyway** — versioned SQL migrations per service, `migrate-at-start=true`, Hibernate in `validate` mode in production. Pattern to be defined in `user-service` first.
 - [ ] **payment-service** — Stripe Connect for marketplace payments, Stripe Subscriptions for recurring billing, Quartz for reconciliation jobs.
 
@@ -494,7 +496,8 @@ Copy `.env.example` to `.env` and fill in all values. Variables marked **require
 - [x] Activation token moved from query param to POST body
 - [x] Credentials removed from docker-compose (`.env` + `.env.example`)
 - [x] JWT keys externalized in `%prod` profile (mounted secrets, not classpath)
-- [ ] Rate limiting distributed with Redis (current limit is per JVM instance)
+- [ ] Rate limiting distributed with Redis (current limit is per JVM instance; multi-replica deployments multiply the effective limit)
+- [ ] **Fix `IpRateLimiter` cross-endpoint bucket sharing** — login (email key), refresh, and upload (IP key) share the same `Deque<Long>` per key; two uploads consume from the same window as two refreshes for the same IP
 - [ ] Activation token expiry (`activationTokenExpiresAt`)
 - [ ] Audit log for sensitive actions (login, status changes)
 - [ ] HTTPS between services in production
@@ -505,13 +508,14 @@ Copy `.env.example` to `.env` and fill in all values. Variables marked **require
 ### Technical
 
 - [ ] **HTTPS** in gateway.
-- [ ] **Observability** — OpenTelemetry distributed traces, metrics, and centralized logs.
+- [ ] **Observability** — OpenTelemetry distributed traces, metrics, and centralized logs. No correlation IDs exist between services today; debugging a gateway → auth → adoption flow requires grepping logs manually.
+- [ ] **Coverage baselines for remaining modules** — JaCoCo is now installed; run `mvn test -pl <module>` and review `target/site/jacoco/index.html` per service to establish baselines.
+- [ ] **CI/CD with GitHub Actions** — no pipeline exists; tests only run locally. Priority: compile + test on push, JaCoCo report as PR artifact, OWASP Dependency Check + Trivy.
 - [ ] **kittigram-cli** — Quarkus + Picocli compiled to a native binary with GraalVM. Use cases: dev service launcher, stack installer, module scaffolding, health checks, migration generation.
 - [ ] Value Objects for remaining services.
 - [ ] Repository interfaces as ports (DIP) across all services.
 - [ ] Pagination on cat listing.
 - [ ] Production Docker Compose.
-- [ ] CI/CD with GitHub Actions.
 
 ### Long term
 
