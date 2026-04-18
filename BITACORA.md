@@ -30,6 +30,7 @@ Kittigram es un portal donde los usuarios pueden subir perfiles de gatos para ad
 8085  → notification-service HTTP
 8086  → adoption-service HTTP
 8087  → form-analysis-service HTTP
+8088  → organization-service HTTP
 8008  → Kafka UI (provectuslabs/kafka-ui)
 9000  → MinIO API S3
 9001  → MinIO consola web
@@ -69,7 +70,8 @@ kittigram/
 ├── gateway-service/
 ├── notification-service/
 ├── adoption-service/
-└── form-analysis-service/
+├── form-analysis-service/
+└── organization-service/
 ```
 
 ### pom.xml raíz (padre)
@@ -90,6 +92,7 @@ kittigram/
     <module>notification-service</module>
     <module>adoption-service</module>
     <module>form-analysis-service</module>
+    <module>organization-service</module>
 </modules>
 ```
 
@@ -1513,6 +1516,39 @@ docker exec -it kittigram-postgres-1 psql -U kittigram -d kittigram -c "\dt cats
 ---
 
 ## Historial de Sesiones
+
+### Sesión 2026-04-18 (Bloque 2 — organization-service)
+
+**Bloque 1 — Nuevo organization-service (puerto 8088)**
+- Nuevo microservicio para gestión de protectoras. Multi-usuario desde el primer día con límite de miembros por plan: `Free(1)`, `Basic(5)`, `Pro(-1 = ilimitado)`.
+- Entidades: `Organization` + `OrganizationMember`. Enums en PascalCase: `OrganizationStatus`, `OrganizationPlan`, `MemberRole`, `MemberStatus`.
+- `@PrePersist` en `Organization` asigna `status=Active`, `plan=Free`, `maxMembers=plan.maxMembers` si no se especifican.
+- `OrganizationMemberRepository`: usa `.firstResult().onItem().transform(Optional::ofNullable)` — `firstResultOptional()` no existe en Hibernate Reactive Panache.
+
+**Bloque 2 — API y reglas de negocio**
+- 8 endpoints: crear organización, `GET /organizations/mine`, perfil por id, actualizar, listar miembros, invitar, cambiar rol, eliminar miembro.
+- `POST /organizations`: solo roles `Organization` o `Admin`. El creador se añade automáticamente como miembro `Admin`.
+- Invitar miembro verifica `count >= maxMembers` (se omite si `maxMembers == -1`).
+- `requireAdmin` privado en `OrganizationService`: helper centralizado para verificar que el caller es ADMIN de la org.
+
+**Bloque 3 — Migración cat-service: `userId` → `organizationId`**
+- `Cat.java`: `userId` renombrado a `organizationId` (`@Column(name="organization_id")`).
+- `CatMapper`: `toEntity` ya no recibe `Long userId`; `organizationId` viene del request body.
+- `CatService`/`CatResource`: endpoints mutables reciben `organizationId` como query param; ownership check compara `cat.organizationId == requestedOrganizationId`.
+- `CatRepository.findByUserId` → `findByOrganizationId`.
+
+**Bloque 4 — Gateway wiring**
+- `ProxyService`: añadida rama `if (path.startsWith("/api/organizations")) return organizationServiceUrl`.
+- `application.properties`: `quarkus.rest-client.organization-service.url` + `%test.*` apuntando a WireMock.
+
+**Problemas encontrados**:
+- `firstResultOptional()` no existe en Hibernate Reactive Panache → sustituido por `.firstResult().onItem().transform(Optional::ofNullable)`.
+- `@TestSecurity` aplica a todo el método de test: no se puede mezclar una request autenticada y una sin autenticar en el mismo método. Solución: separar en dos tests (`testNonMemberCannotUpdateOrganization` y `testUpdateOrganizationUnauthorized`).
+- `init-test.sql` (Testcontainers init script) se ejecuta antes de que Hibernate cree las tablas → INSERTs fallaban. Solución: `init-test.sql` solo crea el esquema; datos de prueba en `import-test.sql` gestionado por `quarkus.hibernate-orm.sql-load-script` (se ejecuta después del DDL).
+
+**Estado al cierre**: 25 tests en organization-service (14 unit + 11 integración), 138 tests totales — BUILD SUCCESS.
+
+---
 
 ### Sesión 2026-04-18
 

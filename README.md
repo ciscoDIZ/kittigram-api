@@ -335,8 +335,9 @@ Unit tests use plain Mockito (`@ExtendWith(MockitoExtension.class)`), no contain
 | notification-service  | 3    | 2           | MockMailbox + in-memory Kafka + Awaitility           |
 | adoption-service      | 17   | 9           | RBAC + ownership checks covered                      |
 | form-analysis-service | 8    | 3           | Rules engine + in-memory Kafka                       |
+| organization-service  | 14   | 11          | Plan-based member limits; @TestSecurity RBAC         |
 
-**Total: 113 tests** (60 unit + 53 integration)
+**Total: 138 tests** (74 unit + 64 integration)
 
 **End-to-end tests** run against the full live stack (all services + Docker infra):
 

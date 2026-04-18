@@ -16,6 +16,7 @@
 | notification-service| 8085 | —           |
 | adoption-service    | 8086 | —           |
 | form-analysis-service| 8087| —           |
+| organization-service| 8088 | —           |
 
 ## Arquitectura — reglas duras
 - Sin dependencias Maven entre módulos. Comunicación solo vía gRPC o Kafka.
