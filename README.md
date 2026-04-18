@@ -483,7 +483,7 @@ Shelters distrust platforms that automate them out of control. The value proposi
 - [ ] Shelter analytics — adoption rates, average time to adopt, rejection reasons.
 - [ ] Post-adoption follow-up — shelter requests updates (photos, health status) from adopters.
 - [ ] Post-adoption ratings — adopter rates shelter and vice versa.
-- [ ] **payment-service** — Stripe Connect for marketplace payments, Stripe Subscriptions for recurring billing, Quartz for reconciliation jobs. Introduce only once at least one shelter is willing to pay.
+- [ ] **payment-service** — Stripe Connect (marketplace between shelters and adopters), Stripe Subscriptions (sponsorship recurring billing), platform fee charged to adopter at adoption confirmation, Quartz for reconciliation. Introduce only once at least one monetization path is validated.
 - [ ] Extensible pricing (freemium tier for small shelters, paid tiers for volume and analytics).
 
 ### Priority 3 — Intelligence
@@ -495,10 +495,15 @@ Shelters distrust platforms that automate them out of control. The value proposi
 - [ ] **Notifications MVP** — extend `notification-service` to cover all adoption state transitions (already partially wired). Shelters and adopters receive email on every status change. This is sufficient for MVP.
 - [ ] **chat-service** (V2) — real-time WebSocket channel (org ↔ adopter), persistent history. Implemented as a separate service given its different connection model. Prioritize only once in-app communication is a validated pain point over email/WhatsApp.
 
-### Priority 5 — Adopter Growth
+### Priority 5 — Adopter Growth & Self-funding
 
-- [ ] Senior cat program.
-- [ ] Sponsorship program — recurring payments for people who cannot adopt.
+These features make the portal self-sustaining without depending solely on shelter subscriptions.
+
+- [ ] **Senior cat sponsorship** — recurring monthly payment to sponsor a senior cat's shelter costs. Sponsors get updates (photos, health status) from the shelter. Technically: Stripe Subscriptions + `Sponsorship` entity linked to `Cat`. First monetization feature to build: low friction, high emotional value, predictable revenue.
+- [ ] **Management fee on adoptions** — small platform fee charged to the adopter at adoption confirmation (Airbnb model). Shelters do not pay; the fee covers operational costs. Requires payment-service to be live first.
+- [ ] **Starter kits for first-time adopters** — curated product bundle (food, litter, toys, vet guide) offered at checkout. *Operational model TBD*: own inventory vs. dropshipping partner. Build catalog and checkout only after the supply chain is defined.
+- [ ] Post-adoption ratings — adopter rates shelter and vice versa.
+- [ ] Post-adoption follow-up — shelter requests updates after adoption (partially covered by the sponsorship updates flow).
 - [ ] **kittigram-cli** — Quarkus + Picocli native binary. Useful once operational complexity justifies it.
 
 ### Security
