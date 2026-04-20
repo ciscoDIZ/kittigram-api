@@ -4,8 +4,8 @@
     <modelVersion>4.0.0</modelVersion>
 
     <parent>
-        <groupId>org.ciscoadiz</groupId>
-        <artifactId>kittigram</artifactId>
+        <groupId>es.kitti</groupId>
+        <artifactId>kitties</artifactId>
         <version>1.0-SNAPSHOT</version>
         <relativePath>../pom.xml</relativePath>
     </parent>

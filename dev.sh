@@ -10,6 +10,7 @@ KNOWN_SERVICES=(
   notification-service
   adoption-service
   form-analysis-service
+  organization-service
 )
 
 PIDS=()
@@ -45,7 +46,7 @@ start_service() {
 }
 
 wait_for_stack() {
-  local ports=(8080 8081 8082 8083 8084 8085 8086 8087)
+  local ports=(8080 8081 8082 8083 8084 8085 8086 8087 8088)
   local expected=${#ports[@]}
   echo "Waiting for all $expected services to be ready..."
   for i in $(seq 1 60); do

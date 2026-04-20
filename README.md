@@ -1,6 +1,6 @@
-# Kittigram API
+# Kitties API
 
-Microservices backend for Kittigram, a cat adoption portal for shelters and veterinarians. Maven multi-module monorepo built with Quarkus 3.34.3 and Java 21.
+Microservices backend for Kitties, a cat adoption platform for shelters and veterinarians. Maven multi-module monorepo built with Quarkus 3.34.3 and Java 21.
 
 ---
 
@@ -26,7 +26,7 @@ Microservices backend for Kittigram, a cat adoption portal for shelters and vete
 
 ## Overview
 
-Kittigram connects adopters with shelters and veterinarians. Each service owns its PostgreSQL schema and communicates via gRPC (synchronous) or Kafka (asynchronous). The gateway is the single entry point exposed to the internet; all other services run in a private network.
+Kitties connects adopters with shelters and veterinarians. Each service owns its PostgreSQL schema and communicates via gRPC (synchronous) or Kafka (asynchronous). The gateway is the single entry point exposed to the internet; all other services run in a private network.
 
 ---
 
@@ -92,7 +92,7 @@ Issues and rotates JWT tokens. Validates credentials via gRPC against `user-serv
 
 ---
 
-### cat-service — port 8083
+### cat-service — port 8084
 
 Cat profiles for adoption. Images are proxied through the gateway; bucket URLs are never exposed directly.
 
@@ -107,7 +107,7 @@ Cat profiles for adoption. Images are proxied through the gateway; bucket URLs a
 
 ---
 
-### storage-service — port 8084
+### storage-service — port 8083
 
 S3-compatible file storage. Backend is MinIO in development and Cloudflare R2 in production.
 
@@ -134,7 +134,7 @@ End-to-end adoption workflow. Adopters submit requests and complete screening fo
 
 **Adoption lifecycle:** `Pending` → `Reviewing` → `Accepted` → `FormCompleted` → `AwaitingPayment` → `Completed` / `Rejected`
 
-**Expenses:** veterinary costs billed to the organization; management fee retained by Kittigram.
+**Expenses:** veterinary costs billed to the organization; management fee retained by Kitties.
 
 **Endpoints:**
 
@@ -174,8 +174,8 @@ Three isolated networks. Only the gateway is reachable from the internet.
                         │                                             │
                         │  user-service        :8081  gRPC :9090      │
                         │  auth-service        :8082  gRPC :9091      │
-                        │  cat-service         :8083                  │
-                        │  storage-service     :8084                  │
+                        │  cat-service         :8084                  │
+                        │  storage-service     :8083                  │
                         │  notification-service :8085                 │
                         │  adoption-service    :8086                  │
                         └──────────────┬──────────────────────────────┘
@@ -198,8 +198,8 @@ Implemented via Docker networks (dev/staging) or Kubernetes NetworkPolicy (produ
 | gateway-service       | 8080  | —     |
 | user-service          | 8081  | 9090  |
 | auth-service          | 8082  | 9091  |
-| cat-service           | 8083  | —     |
-| storage-service       | 8084  | —     |
+| cat-service           | 8084  | —     |
+| storage-service       | 8083  | —     |
 | notification-service  | 8085  | —     |
 | adoption-service      | 8086  | —     |
 | PostgreSQL            | 5432  | —     |
@@ -311,13 +311,13 @@ done
 
 **In production** the keys are read from the filesystem, not from the classpath. Mount them as Docker Secrets or Kubernetes Secrets at `/run/secrets/` (or override with `JWT_PRIVATE_KEY_LOCATION` / `JWT_PUBLIC_KEY_LOCATION`).
 
-**JWT configuration:** issuer `https://kittigram.ciscoadiz.org`, access token TTL 900 s, refresh token TTL 7 days. The `groups` claim carries the user role (`User`, `Organization`, `Admin`).
+**JWT configuration:** issuer `https://www.kitti.es`, access token TTL 900 s, refresh token TTL 7 days. The `groups` claim carries the user role (`User`, `Organization`, `Admin`).
 
 On Windows, run the commands above in Git Bash or WSL. To install OpenSSL via winget: `winget install ShiningLight.OpenSSL`.
 
 ### gRPC internal secret
 
-`auth-service` and `user-service` communicate over gRPC protected by a shared secret injected as the `x-internal-token` header. Set `GRPC_INTERNAL_SECRET` in your `.env` (required in production; defaults to `kittigram-dev-secret` in dev).
+`auth-service` and `user-service` communicate over gRPC protected by a shared secret injected as the `x-internal-token` header. Set `GRPC_INTERNAL_SECRET` in your `.env` (required in production; defaults to `kitties-dev-secret` in dev).
 
 ---
 
@@ -335,8 +335,9 @@ Unit tests use plain Mockito (`@ExtendWith(MockitoExtension.class)`), no contain
 | notification-service  | 3    | 2           | MockMailbox + in-memory Kafka + Awaitility           |
 | adoption-service      | 17   | 9           | RBAC + ownership checks covered                      |
 | form-analysis-service | 8    | 3           | Rules engine + in-memory Kafka                       |
+| organization-service  | 14   | 11          | Plan-based member limits; @TestSecurity RBAC         |
 
-**Total: 113 tests** (60 unit + 53 integration)
+**Total: 138 tests** (74 unit + 64 integration)
 
 **End-to-end tests** run against the full live stack (all services + Docker infra):
 
@@ -426,8 +427,8 @@ Copy `.env.example` to `.env` and fill in all values. Variables marked **require
 | `DB_PASSWORD`               | —                        | PostgreSQL password                      |
 | `DB_HOST`                   | `localhost`              | PostgreSQL host                          |
 | `DB_PORT`                   | `5432`                   | PostgreSQL port                          |
-| `DB_NAME`                   | `kittigram`              | PostgreSQL database                      |
-| `GRPC_INTERNAL_SECRET`      | `kittigram-dev-secret`   | Shared secret for auth↔user gRPC channel; **required in prod** |
+| `DB_NAME`                   | `kitties`               | PostgreSQL database                      |
+| `GRPC_INTERNAL_SECRET`      | `kitties-dev-secret`    | Shared secret for auth↔user gRPC channel; **required in prod** |
 | `STORAGE_SERVICE_URL`       | `http://localhost:8084`  | Storage service URL                      |
 | `USER_SERVICE_HOST`         | `localhost`              | User service host (gRPC)                 |
 | `KAFKA_HOST`                | `localhost`              | Kafka broker host                        |
@@ -455,7 +456,7 @@ Copy `.env.example` to `.env` and fill in all values. Variables marked **require
 
 ## Roadmap
 
-> **Business model**: Kittigram is B2B2C — shelters are the paying customer, adopters are the end user. The shelter dashboard and workflow tooling are the core product; the adoption portal is the channel that gives shelters value.
+> **Business model**: Kitties is B2B2C — shelters are the paying customer, adopters are the end user. The shelter dashboard and workflow tooling are the core product; the adoption portal is the channel that gives shelters value.
 
 ---
 
@@ -504,7 +505,7 @@ These features make the portal self-sustaining without depending solely on shelt
 - [ ] **Starter kits for first-time adopters** — curated product bundle (food, litter, toys, vet guide) offered at checkout. *Operational model TBD*: own inventory vs. dropshipping partner. Build catalog and checkout only after the supply chain is defined.
 - [ ] Post-adoption ratings — adopter rates shelter and vice versa.
 - [ ] Post-adoption follow-up — shelter requests updates after adoption (partially covered by the sponsorship updates flow).
-- [ ] **kittigram-cli** — Quarkus + Picocli native binary. Useful once operational complexity justifies it.
+- [ ] **kitties-cli** — Quarkus + Picocli native binary. Useful once operational complexity justifies it.
 
 ### Security
 
