@@ -43,8 +43,9 @@ public class OrganizationService {
     }
 
     @WithSession
-    public Uni<OrganizationResponse> findById(Long id) {
-        return organizationRepository.findById(id)
+    public Uni<OrganizationResponse> findById(Long id, Long callerId) {
+        return requireMember(id, callerId)
+                .onItem().transformToUni(ignored -> organizationRepository.findById(id))
                 .onItem().ifNull().failWith(() -> new OrganizationNotFoundException(id))
                 .onItem().transform(mapper::toResponse);
     }
@@ -140,6 +141,14 @@ public class OrganizationService {
         return memberRepository.isAdmin(organizationId, userId)
                 .onItem().transformToUni(isAdmin -> {
                     if (!isAdmin) throw new ForbiddenException();
+                    return Uni.createFrom().voidItem();
+                });
+    }
+
+    private Uni<Void> requireMember(Long organizationId, Long userId) {
+        return memberRepository.isMember(organizationId, userId)
+                .onItem().transformToUni(isMember -> {
+                    if (!isMember) throw new ForbiddenException();
                     return Uni.createFrom().voidItem();
                 });
     }
