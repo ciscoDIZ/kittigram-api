@@ -62,6 +62,10 @@ Write the **minimum code** required to make the failing test pass. Rules:
 - Follow the project patterns exactly: PanacheEntity, PanacheRepository, @WithSession/@WithTransaction, Records DTOs, manual mappers, JAX-RS resources.
 - Only touch the files that the test directly exercises.
 
+**Triangulation guard:** if the simplest implementation you can imagine is hardcoding the expected return value (e.g. `return 200;`, `return List.of();`), that means the test set is insufficient — the tests don't yet force real logic. Before writing that hardcode, add a second test that would break it (different input, different expected output), get it RED, then implement the real logic that satisfies both.
+
+**Reactive/Mutiny guard (specific to this stack):** a test can appear GREEN because the `Uni`/`Multi` chain was never subscribed and the assertion never ran. Before accepting a green result on reactive code, verify the test explicitly awaits the result — either via `.await().indefinitely()`, `@TestReactiveTransaction`, or RestAssured's blocking HTTP call. If in doubt, add a failing assertion temporarily to confirm the test body actually executes.
+
 After each implementation attempt:
 
 1. Run: `mvn test -pl <module> -Dtest=<TestClass>`
@@ -73,9 +77,16 @@ Show the full test output at each run.
 
 ---
 
-### PHASE 4 — REFACTOR
+### PHASE 4 — SABOTAGE + REFACTOR
 
-Now that the test is green, clean up. Rules:
+**Sabotage first.** Before refactoring, verify the test is actually catching the behaviour and not passing vacuously:
+
+1. Temporarily break one meaningful line of the production code just written (wrong return value, removed condition, flipped comparison).
+2. Run the test — it **must go RED**. If it stays green, the test is not covering what we think; go back to Phase 2 and strengthen it.
+3. Restore the line, re-run, confirm GREEN again.
+4. State: "Sabotage passed — test correctly detects the regression."
+
+**Then refactor.** Rules:
 
 - No behaviour changes — the test must stay green throughout.
 - Remove duplication, improve naming, extract helpers only if they already exist nearby.
