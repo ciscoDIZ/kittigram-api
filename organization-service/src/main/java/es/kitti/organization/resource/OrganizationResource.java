@@ -44,7 +44,8 @@ public class OrganizationResource {
     @GET
     @Path("/{id}")
     public Uni<OrganizationResponse> findById(@PathParam("id") Long id) {
-        return organizationService.findById(id);
+        Long userId = Long.parseLong(jwt.getSubject());
+        return organizationService.findById(id, userId);
     }
 
     @PUT

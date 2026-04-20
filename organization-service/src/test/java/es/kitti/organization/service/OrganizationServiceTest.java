@@ -83,10 +83,19 @@ class OrganizationServiceTest {
 
     @Test
     void testFindByIdNotFound() {
+        when(memberRepository.isMember(99L, 10L)).thenReturn(Uni.createFrom().item(true));
         when(organizationRepository.findById(99L)).thenReturn(Uni.createFrom().nullItem());
 
         assertThrows(OrganizationNotFoundException.class,
-                () -> service.findById(99L).await().indefinitely());
+                () -> service.findById(99L, 10L).await().indefinitely());
+    }
+
+    @Test
+    void testFindByIdForbiddenForNonMember() {
+        when(memberRepository.isMember(1L, 999L)).thenReturn(Uni.createFrom().item(false));
+
+        assertThrows(ForbiddenException.class,
+                () -> service.findById(1L, 999L).await().indefinitely());
     }
 
     @Test

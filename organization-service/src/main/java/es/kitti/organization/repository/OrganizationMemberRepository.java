@@ -43,4 +43,11 @@ public class OrganizationMemberRepository implements PanacheRepository<Organizat
                 organizationId, userId, MemberRole.Admin, MemberStatus.Active)
                 .onItem().transform(c -> c > 0);
     }
+
+    @WithSession
+    public Uni<Boolean> isMember(Long organizationId, Long userId) {
+        return count("organizationId = ?1 and userId = ?2 and status = ?3",
+                organizationId, userId, MemberStatus.Active)
+                .onItem().transform(c -> c > 0);
+    }
 }

@@ -157,6 +157,40 @@ class OrganizationResourceTest {
     @Test
     @TestSecurity(user = "999", roles = "Organization")
     @JwtSecurity(claims = {@Claim(key = "sub", value = "999")})
+    void findById_shouldReturn403_whenCallerIsNotMember() {
+        // org 1 seeded in import-test.sql with admin=user 100; user 999 is not a member
+        given()
+                .when()
+                .get("/organizations/1")
+                .then()
+                .statusCode(403);
+    }
+
+    @Test
+    @TestSecurity(user = "11", roles = "Organization")
+    @JwtSecurity(claims = {@Claim(key = "sub", value = "11")})
+    void findById_shouldReturn200_whenCallerIsMember() {
+        // user 11 creates an org (becomes admin member) and retrieves it
+        int orgId = given()
+                .contentType(ContentType.JSON)
+                .body("{\"name\":\"Member Org\"}")
+                .when()
+                .post("/organizations")
+                .then()
+                .statusCode(201)
+                .extract().path("id");
+
+        given()
+                .when()
+                .get("/organizations/" + orgId)
+                .then()
+                .statusCode(200)
+                .body("id", equalTo(orgId));
+    }
+
+    @Test
+    @TestSecurity(user = "999", roles = "Organization")
+    @JwtSecurity(claims = {@Claim(key = "sub", value = "999")})
     void testNonMemberCannotUpdateOrganization() {
         // user 999 is NOT a member of org 1 (seeded in init-test.sql, admin=user 100)
         given()

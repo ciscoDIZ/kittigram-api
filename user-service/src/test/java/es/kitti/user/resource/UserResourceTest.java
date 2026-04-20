@@ -2,6 +2,9 @@ package es.kitti.user.resource;
 
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
+import io.quarkus.test.security.TestSecurity;
+import io.quarkus.test.security.jwt.Claim;
+import io.quarkus.test.security.jwt.JwtSecurity;
 import io.restassured.http.ContentType;
 import io.smallrye.reactive.messaging.memory.InMemoryConnector;
 import io.smallrye.reactive.messaging.memory.InMemorySink;
@@ -71,5 +74,37 @@ class UserResourceTest {
         given()
                 .when().get("/users/test@kitti.es")
                 .then().statusCode(401);
+    }
+
+    @Test
+    @TestSecurity(user = "alice@kitti.es", roles = "User")
+    @JwtSecurity(claims = {@Claim(key = "email", value = "alice@kitti.es")})
+    void findByEmail_shouldReturn403_whenRequestingAnotherUsersProfile() {
+        given()
+                .when().get("/users/bob@kitti.es")
+                .then().statusCode(403);
+    }
+
+    @Test
+    @TestSecurity(user = "alice@kitti.es", roles = "User")
+    @JwtSecurity(claims = {@Claim(key = "email", value = "alice@kitti.es")})
+    void findByEmail_shouldReturn200_whenRequestingOwnProfile() {
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                    {
+                        "email": "alice@kitti.es",
+                        "password": "password123",
+                        "name": "Alice",
+                        "surname": "Test"
+                    }
+                    """)
+                .when().post("/users")
+                .then().statusCode(201);
+
+        given()
+                .when().get("/users/alice@kitti.es")
+                .then().statusCode(200)
+                .body("email", equalTo("alice@kitti.es"));
     }
 }
