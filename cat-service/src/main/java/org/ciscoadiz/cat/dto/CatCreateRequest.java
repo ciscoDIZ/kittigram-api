@@ -11,7 +11,6 @@ public record CatCreateRequest(
         @NotBlank String sex,
         String description,
         Boolean neutered,
-        @NotNull Long organizationId,
         @NotBlank String city,
         String region,
         @NotBlank String country,

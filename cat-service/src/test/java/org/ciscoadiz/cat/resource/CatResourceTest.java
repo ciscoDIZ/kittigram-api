@@ -73,7 +73,6 @@ class CatResourceTest {
                     "age": 2,
                     "sex": "Male",
                     "neutered": true,
-                    "organizationId": 1,
                     "city": "La Orotava",
                     "region": "Tenerife",
                     "country": "España"

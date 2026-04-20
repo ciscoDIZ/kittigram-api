@@ -76,7 +76,7 @@ class CatServiceTest {
     @Test
     void createCat_success() {
         var request = new CatCreateRequest(
-                "Peluso", 2, "Male", null, true, 10L,
+                "Peluso", 2, "Male", null, true,
                 "La Orotava", "Tenerife", "España", null, null
         );
 
@@ -86,7 +86,7 @@ class CatServiceTest {
         when(catMapper.toResponse(testCat, List.of()))
                 .thenReturn(testCatResponse);
 
-        var result = catService.createCat(request)
+        var result = catService.createCat(request, 10L)
                 .await().indefinitely();
 
         assertNotNull(result);

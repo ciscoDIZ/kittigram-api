@@ -36,8 +36,9 @@ public class CatService {
     StorageClient storageClient;
 
     @WithTransaction
-    public Uni<CatResponse> createCat(CatCreateRequest request) {
+    public Uni<CatResponse> createCat(CatCreateRequest request, Long callerId) {
         Cat cat = catMapper.toEntity(request);
+        cat.organizationId = callerId;
         return catRepository.persist(cat)
                 .onItem().transform(saved -> catMapper.toResponse(saved, List.of()));
     }

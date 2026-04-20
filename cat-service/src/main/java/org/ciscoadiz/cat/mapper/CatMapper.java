@@ -18,7 +18,6 @@ public class CatMapper {
         cat.sex = CatSex.valueOf(request.sex());
         cat.description = request.description();
         cat.neutered = request.neutered() != null ? request.neutered() : false;
-        cat.organizationId = request.organizationId();
         cat.city = request.city();
         cat.region = request.region();
         cat.country = request.country();
