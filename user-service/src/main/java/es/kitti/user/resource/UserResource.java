@@ -30,6 +30,7 @@ public class UserResource {
     @GET
     @Path("{email}")
     public Uni<Response> findByEmail(@PathParam("email") String email) {
+        requireSelf(email);
         return userService.findByEmail(email)
                 .onItem().transform(Response::ok)
                 .onItem().transform(Response.ResponseBuilder::build);
