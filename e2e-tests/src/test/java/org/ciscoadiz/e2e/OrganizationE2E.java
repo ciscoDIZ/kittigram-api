@@ -205,7 +205,7 @@ class OrganizationE2E {
         given()
             .contentType(ContentType.JSON)
             .header("Authorization", "Bearer " + adminToken)
-            .body(Map.of("userId", userUserId))
+            .body(Map.of("userId", userUserId, "role", "Staff"))
         .when()
             .post("/api/organizations/" + orgId + "/members")
         .then()
