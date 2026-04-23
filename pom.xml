@@ -29,6 +29,7 @@
         <module>adoption-service</module>
         <module>form-analysis-service</module>
         <module>organization-service</module>
+        <module>e2e-tests</module>
     </modules>
 
     <dependencyManagement>
@@ -158,9 +159,6 @@
     <profiles>
         <profile>
             <id>e2e</id>
-            <modules>
-                <module>e2e-tests</module>
-            </modules>
         </profile>
         <profile>
             <id>native</id>

@@ -16,7 +16,17 @@
 
     <properties>
         <jacoco.skip>true</jacoco.skip>
+        <skipTests>true</skipTests>
     </properties>
+
+    <profiles>
+        <profile>
+            <id>e2e</id>
+            <properties>
+                <skipTests>false</skipTests>
+            </properties>
+        </profile>
+    </profiles>
 
     <dependencies>
         <dependency>
