@@ -165,6 +165,30 @@ class SecurityE2E {
             .statusCode(400);
     }
 
+    @Test
+    void upload_maliciousFileWithJpegContentType_returns400() {
+        byte[] malicious = new byte[100]; // sin magic bytes — simula fichero malicioso
+
+        given()
+            .header("Authorization", "Bearer " + userToken)
+            .header("X-Forwarded-For", "sec-upload-" + TS)
+            .multiPart("file", "malware.jpg", malicious, "image/jpeg")
+        .when()
+            .post("/api/storage/upload")
+        .then()
+            .statusCode(400);
+    }
+
+    @Test
+    void response_containsNoSniffHeader() {
+        given()
+        .when()
+            .get("/api/cats")
+        .then()
+            .statusCode(200)
+            .header("X-Content-Type-Options", equalTo("nosniff"));
+    }
+
     // ---- helpers ----
 
     private static void activateUser(String email) {
