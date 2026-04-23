@@ -157,6 +157,7 @@ class SecurityE2E {
     void validation_blankLoginBody_returns400() {
         given()
             .contentType(ContentType.JSON)
+            .header("X-Forwarded-For", "test-" + TS)
             .body(Map.of("email", "", "password", ""))
         .when()
             .post("/api/auth/login")
