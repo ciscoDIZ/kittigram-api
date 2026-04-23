@@ -335,6 +335,22 @@ class GatewayResourceTest {
     }
 
     @Test
+    void testResponseContainsNoSniffHeader() {
+        wiremock.register(get(urlEqualTo("/cats"))
+                .willReturn(aResponse()
+                        .withStatus(200)
+                        .withHeader("Content-Type", "application/json")
+                        .withBody("[]")));
+
+        given()
+                .when()
+                .get("/api/cats")
+                .then()
+                .statusCode(200)
+                .header("X-Content-Type-Options", equalTo("nosniff"));
+    }
+
+    @Test
     void testRefreshFallsToRoutingContextIp() {
         wiremock.register(post(urlEqualTo("/auth/refresh"))
                 .willReturn(aResponse()

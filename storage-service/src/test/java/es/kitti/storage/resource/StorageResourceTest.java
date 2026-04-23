@@ -20,7 +20,8 @@ class StorageResourceTest {
     void testUploadImage() throws IOException {
         File tempFile = File.createTempFile("test", ".jpg");
         try (FileOutputStream fos = new FileOutputStream(tempFile)) {
-            fos.write(new byte[100]);
+            fos.write(new byte[]{(byte) 0xFF, (byte) 0xD8, (byte) 0xFF}); // JPEG magic
+            fos.write(new byte[97]);
         }
         tempFile.deleteOnExit();
 
@@ -44,6 +45,22 @@ class StorageResourceTest {
 
         given()
                 .multiPart("file", tempFile, "application/pdf")
+                .when()
+                .post("/storage/upload")
+                .then()
+                .statusCode(400);
+    }
+
+    @Test
+    void testUploadMaliciousFileWithJpegContentType() throws IOException {
+        File tempFile = File.createTempFile("malicious", ".jpg");
+        try (FileOutputStream fos = new FileOutputStream(tempFile)) {
+            fos.write(new byte[100]); // sin magic bytes — todo ceros
+        }
+        tempFile.deleteOnExit();
+
+        given()
+                .multiPart("file", tempFile, "image/jpeg")
                 .when()
                 .post("/storage/upload")
                 .then()

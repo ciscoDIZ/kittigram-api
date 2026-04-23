@@ -70,6 +70,7 @@ public class ProxyService {
                 rb.entity(r.body().getBytes())
                   .header("Content-Type", r.getHeader("Content-Type"));
             }
+            rb.header("X-Content-Type-Options", "nosniff");
             return rb.build();
         });
     }
