@@ -330,20 +330,21 @@ Unit tests use plain Mockito (`@ExtendWith(MockitoExtension.class)`), no contain
 | user-service          | 8    | 3           | SmallRye in-memory Kafka                             |
 | auth-service          | 7    | 4           | `@InjectMock` on gRPC client                         |
 | cat-service           | 9    | 5           | JWT test tokens via `quarkus-smallrye-jwt-build`     |
-| storage-service       | 6    | 2           | Real MinIO via `QuarkusTestResourceLifecycleManager` |
-| gateway-service       | 2    | 22          | WireMock 1.6.1 DevService; Mockito para unit tests   |
+| storage-service       | 9    | 3           | Real MinIO via `QuarkusTestResourceLifecycleManager` |
+| gateway-service       | 2    | 23          | WireMock 1.6.1 DevService; Mockito para unit tests   |
 | notification-service  | 3    | 2           | MockMailbox + in-memory Kafka + Awaitility           |
 | adoption-service      | 17   | 9           | RBAC + ownership checks covered                      |
 | form-analysis-service | 8    | 3           | Rules engine + in-memory Kafka                       |
 | organization-service  | 14   | 11          | Plan-based member limits; @TestSecurity RBAC         |
 
-**Total: 138 tests** (74 unit + 64 integration)
+**Total: 143 tests** (77 unit + 66 integration)
 
 **End-to-end tests** run against the full live stack (all services + Docker infra):
 
 | Suite              | Tests | Coverage |
 |--------------------|-------|----------|
 | `StorageE2E`       | 6     | Upload JPEG, serve public, 401, 400 invalid type, delete, rate limit 429 |
+| `SecurityE2E`      | 2     | Magic byte upload rejection (400), X-Content-Type-Options nosniff on gateway responses |
 
 ```bash
 # Run e2e suite (requires full stack running)
@@ -518,6 +519,8 @@ These features make the portal self-sustaining without depending solely on shelt
 - [x] Activation token moved from query param to POST body
 - [x] Credentials removed from docker-compose (`.env` + `.env.example`)
 - [x] JWT keys externalized in `%prod` profile (mounted secrets, not classpath)
+- [x] MIME magic byte validation on upload — rejects files whose bytes don't match declared Content-Type (JPEG/PNG spoofing prevention)
+- [x] `X-Content-Type-Options: nosniff` injected on all gateway responses (MIME sniffing prevention)
 - [ ] **Fix `IpRateLimiter` cross-endpoint bucket sharing** — refresh and upload (IP key) share the same `Deque<Long>`; two uploads consume from the same window as two refreshes for the same IP.
 - [ ] Rate limiting distributed with Redis — current limit is per JVM instance; multi-replica deployments multiply the effective limit.
 - [ ] Activation token expiry (`activationTokenExpiresAt`)
