@@ -329,7 +329,7 @@ Production deployment uses **Docker Compose** with all 9 services pre-built and 
 ### Prerequisites
 
 - Docker + Docker Compose v2
-- A Linux server with port 8080 open (or 80/443 if behind a reverse proxy)
+- A Linux server with ports 80 and 443 open
 - Docker Hub account (for image push; can be replaced with any registry)
 - GitHub repository secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`
 
