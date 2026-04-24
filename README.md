@@ -464,14 +464,14 @@ Copy `.env.example` to `.env` and fill in all values. Variables marked **require
 ### Priority 1 — Foundation (prerequisite for everything)
 
 - [x] All services implemented with full adoption workflow
-- [x] Integration and unit tests for all services (113 total)
+- [x] Integration and unit tests for all services (143 total)
 - [x] Value Objects (`Email`, `ActivationToken`)
 - [x] User roles (`User`, `Organization`, `Admin`)
 - [x] Security audit completed (11 vulnerabilities found and fixed, score 5.5 → 8.5/10)
 - [x] JaCoCo configured across all modules (quarkus-jacoco + maven plugin in root pom)
 - [x] gateway-service instruction coverage at 100% (574/574); branch coverage 93.5% (4 unreachable branches in Vert.x WebClient code)
 - [ ] **CI/CD with GitHub Actions** — no pipeline exists; tests only run locally. Minimum: compile + test on push, JaCoCo report as PR artifact, OWASP Dependency Check + Trivy.
-- [ ] **Flyway** — versioned SQL migrations per service, `migrate-at-start=true`, Hibernate in `validate` mode in production. Pattern to be defined in `user-service` first.
+- [x] **Flyway** — versioned SQL migrations per service, `migrate-at-start=true`, Hibernate in `validate` mode in production. All 6 database-backed services have V1 migrations (auth, user, cat, adoption, organization, form-analysis).
 - [ ] **Production Docker Compose** — prerequisite for any real deployment.
 - [ ] **Observability** — OpenTelemetry distributed traces, metrics, and centralized logs. No correlation IDs between services today; debugging a gateway → auth → adoption flow requires grepping logs manually.
 - [ ] **Coverage baselines for remaining modules** — JaCoCo is installed; run `mvn test -pl <module>` and review `target/site/jacoco/index.html` per service.

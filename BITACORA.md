@@ -1222,12 +1222,15 @@ CREATE SCHEMA IF NOT EXISTS users;
 | user-service | 3 | 8 | **11** |
 | auth-service | 4 | 7 | **11** |
 | cat-service | 5 | 9 | **14** |
-| storage-service | 2 | 6 | **8** |
-| gateway-service | 4 | — | **4** |
+| storage-service | 3 | 9 | **12** |
+| gateway-service | 23 | 2 | **25** |
 | notification-service | 2 | 3 | **5** |
-| adoption-service | 9 | 20 | **29** |
+| adoption-service | 9 | 17 | **26** |
 | form-analysis-service | 3 | 8 | **11** |
-| **Total** | **32** | **61** | **93** |
+| organization-service | 11 | 14 | **25** |
+| **Total** | **63** | **77** | **143** |
+
+E2E adicionales: `StorageE2E` (6 tests), `SecurityE2E` (2 tests) — requieren stack completo.
 
 ### Tests unitarios
 
@@ -1516,6 +1519,37 @@ docker exec -it kittigram-postgres-1 psql -U kittigram -d kittigram -c "\dt cats
 ---
 
 ## Historial de Sesiones
+
+### Sesión 2026-04-23/24 — Seguridad + Flyway
+
+**Contexto**: dos ramas paralelas de trabajo: controles de seguridad en `security` y migraciones de base de datos en `feat/flyway-migrations`.
+
+**Bloque 1 — Seguridad (rama `security`, mergeada a `main`)**
+- `StorageService`: validación de magic bytes en upload. Rechaza ficheros cuyo contenido no coincide con el `Content-Type` declarado (JPEG/PNG spoofing). Tipos soportados: `image/jpeg` (`FF D8 FF`) y `image/png` (`89 50 4E 47`).
+- `GatewayResource`: cabecera `X-Content-Type-Options: nosniff` inyectada en todas las respuestas del gateway via `ContainerResponseFilter`.
+- Tests: `StorageServiceTest` ampliado (9 tests); `GatewayResourceTest` añade aserción de la cabecera (25 tests totales en gateway).
+- E2E: `SecurityE2E` (nuevo) — 2 tests: rechazo de upload con bytes inválidos (400) y verificación de `nosniff` en respuesta del gateway.
+
+**Bloque 2 — Flyway (rama `feat/flyway-migrations`)**
+- Patrón aplicado en los 6 servicios con BD PostgreSQL:
+  - `quarkus-flyway` + `quarkus-jdbc-postgresql` en `pom.xml` (solo JDBC para Flyway; el cliente reactivo se mantiene).
+  - `application.properties`: Flyway desactivado globalmente, activado solo en `%prod` con `migrate-at-start=true` y schema propio. Hibernate en `validate` en prod.
+  - Fichero `V1__init_<schema>.sql` en `src/main/resources/db/migration/`.
+- Estado por servicio:
+  - `auth-service`: ya tenía V1 migration de sesión anterior; configuración completada.
+  - `user-service`: ya tenía V1 migration (referencia del patrón).
+  - `cat-service`: deps ya añadidas en commit previo; añadidos config + V1 migration (`cats`, `cat_images`).
+  - `adoption-service`: deps + config + V1 migration (`adoption_requests`, `adoption_forms`, `expenses`, `interviews`).
+  - `organization-service`: deps + config + V1 migration (`organizations`, `organization_members` con UNIQUE en `(organization_id, user_id)`).
+  - `form-analysis-service`: deps + config + V1 migration (`form_analyses`, `form_flags`).
+- Todos los módulos compilan limpio tras los cambios.
+
+**Problemas encontrados**:
+- Ninguno relevante. Patrón bien definido desde `user-service`; aplicación mecánica a los demás servicios.
+
+**Estado al cierre**: 143 tests (77 unit + 66 integration). Flyway completamente desplegado en todos los servicios con BD. Dos nuevos controles de seguridad implementados y cubiertos con tests.
+
+---
 
 ### Sesión 2026-04-18 (Bloque 2 — organization-service)
 
