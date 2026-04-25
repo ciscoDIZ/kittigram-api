@@ -18,14 +18,18 @@ public class JwtAuthFilter {
             "POST:/api/auth/refresh",
             "POST:/api/auth/logout",
             "POST:/api/users",
-            "POST:/api/users/activate"
+            "POST:/api/users/activate",
+            "GET:/doc",
+            "GET:/swagger-ui"
     );
 
     private static final Set<Pattern> PUBLIC_PATTERNS = Set.of(
             Pattern.compile("GET:/api/cats"),
             Pattern.compile("GET:/api/cats/\\d+"),
             Pattern.compile("GET:/api/storage/files/.*"),
-            Pattern.compile("GET:/api/storage/files/.+")
+            Pattern.compile("GET:/api/storage/files/.+"),
+            Pattern.compile("GET:/api/openapi/.*"),
+            Pattern.compile("GET:/swagger-ui/.*")
     );
 
     @ServerRequestFilter
