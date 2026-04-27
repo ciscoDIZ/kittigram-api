@@ -20,7 +20,6 @@ import org.jboss.resteasy.reactive.multipart.FileUpload;
 
 @Path("/cats")
 @Produces(MediaType.APPLICATION_JSON)
-@Consumes(MediaType.APPLICATION_JSON)
 @Authenticated
 public class CatResource {
 
@@ -47,6 +46,7 @@ public class CatResource {
     }
 
     @POST
+    @Consumes(MediaType.APPLICATION_JSON)
     public Uni<Response> createCat(@Valid CatCreateRequest request) {
         Long callerId = Long.parseLong(jwt.getSubject());
         return catService.createCat(request, callerId)
@@ -56,6 +56,7 @@ public class CatResource {
 
     @PUT
     @Path("/{id}")
+    @Consumes(MediaType.APPLICATION_JSON)
     public Uni<Response> updateCat(
             @PathParam("id") Long id,
             @Valid CatUpdateRequest request) {
