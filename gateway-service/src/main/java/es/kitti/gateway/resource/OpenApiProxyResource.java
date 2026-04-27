@@ -1,5 +1,6 @@
 package es.kitti.gateway.resource;
 
+import io.quarkus.arc.profile.IfBuildProfile;
 import io.quarkus.logging.Log;
 import io.smallrye.mutiny.Uni;
 import io.vertx.mutiny.core.buffer.Buffer;
@@ -14,6 +15,7 @@ import org.eclipse.microprofile.openapi.annotations.tags.Tag;
 @Path("/api/openapi")
 @Tag(name = "OpenAPI", description = "OpenAPI specifications of each microservice")
 @ApplicationScoped
+@IfBuildProfile("dev")
 public class OpenApiProxyResource {
 
     @Inject
