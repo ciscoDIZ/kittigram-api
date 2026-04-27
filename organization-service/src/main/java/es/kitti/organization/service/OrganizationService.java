@@ -5,16 +5,13 @@ import io.quarkus.hibernate.reactive.panache.common.WithTransaction;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
-import jakarta.ws.rs.ForbiddenException;
-import es.kitti.organization.dto.*;
-import es.kitti.organization.entity.*;
-import es.kitti.organization.exception.MemberLimitExceededException;
+import es.kitti.organization.dto.CreateOrganizationRequest;
+import es.kitti.organization.dto.OrganizationResponse;
+import es.kitti.organization.dto.UpdateOrganizationRequest;
+import es.kitti.organization.entity.Organization;
 import es.kitti.organization.exception.OrganizationNotFoundException;
 import es.kitti.organization.mapper.OrganizationMapper;
-import es.kitti.organization.repository.OrganizationMemberRepository;
 import es.kitti.organization.repository.OrganizationRepository;
-
-import java.util.List;
 
 @ApplicationScoped
 public class OrganizationService {
@@ -23,7 +20,7 @@ public class OrganizationService {
     OrganizationRepository organizationRepository;
 
     @Inject
-    OrganizationMemberRepository memberRepository;
+    OrganizationMemberService memberService;
 
     @Inject
     OrganizationMapper mapper;
@@ -32,19 +29,14 @@ public class OrganizationService {
     public Uni<OrganizationResponse> create(CreateOrganizationRequest request, Long creatorUserId) {
         Organization org = mapper.toEntity(request);
         return organizationRepository.persist(org)
-                .onItem().transformToUni(saved -> {
-                    OrganizationMember member = new OrganizationMember();
-                    member.organizationId = saved.id;
-                    member.userId = creatorUserId;
-                    member.role = MemberRole.Admin;
-                    return memberRepository.persist(member)
-                            .onItem().transform(m -> mapper.toResponse(saved));
-                });
+                .onItem().transformToUni(saved ->
+                        memberService.addCreatorAsAdmin(saved.id, creatorUserId)
+                                .onItem().transform(m -> mapper.toResponse(saved)));
     }
 
     @WithSession
     public Uni<OrganizationResponse> findById(Long id, Long callerId) {
-        return requireMember(id, callerId)
+        return memberService.requireMember(id, callerId)
                 .onItem().transformToUni(ignored -> organizationRepository.findById(id))
                 .onItem().ifNull().failWith(() -> new OrganizationNotFoundException(id))
                 .onItem().transform(mapper::toResponse);
@@ -52,7 +44,7 @@ public class OrganizationService {
 
     @WithSession
     public Uni<OrganizationResponse> findByCurrentUser(Long userId) {
-        return memberRepository.findActiveByUserId(userId)
+        return memberService.findActiveByUserId(userId)
                 .onItem().transformToUni(opt -> {
                     if (opt.isEmpty()) throw new OrganizationNotFoundException(0L);
                     return organizationRepository.findById(opt.get().organizationId);
@@ -63,7 +55,7 @@ public class OrganizationService {
 
     @WithTransaction
     public Uni<OrganizationResponse> update(Long id, Long callerId, UpdateOrganizationRequest request) {
-        return requireAdmin(id, callerId)
+        return memberService.requireAdmin(id, callerId)
                 .onItem().transformToUni(ignored -> organizationRepository.findById(id))
                 .onItem().ifNull().failWith(() -> new OrganizationNotFoundException(id))
                 .onItem().transformToUni(org -> {
@@ -79,77 +71,5 @@ public class OrganizationService {
                     return organizationRepository.persist(org);
                 })
                 .onItem().transform(mapper::toResponse);
-    }
-
-    @WithSession
-    public Uni<List<MemberResponse>> listMembers(Long organizationId, Long callerId) {
-        return requireAdmin(organizationId, callerId)
-                .onItem().transformToUni(ignored ->
-                        memberRepository.findActiveByOrganizationId(organizationId))
-                .onItem().transform(list -> list.stream().map(mapper::toResponse).toList());
-    }
-
-    @WithTransaction
-    public Uni<MemberResponse> inviteMember(Long organizationId, Long callerId, InviteMemberRequest request) {
-        return requireAdmin(organizationId, callerId)
-                .onItem().transformToUni(ignored -> organizationRepository.findById(organizationId))
-                .onItem().ifNull().failWith(() -> new OrganizationNotFoundException(organizationId))
-                .onItem().transformToUni(org ->
-                        memberRepository.countActiveByOrganizationId(organizationId)
-                                .onItem().transformToUni(count -> {
-                                    if (org.maxMembers != -1 && count >= org.maxMembers) {
-                                        throw new MemberLimitExceededException(org.maxMembers);
-                                    }
-                                    OrganizationMember member = new OrganizationMember();
-                                    member.organizationId = organizationId;
-                                    member.userId = request.userId();
-                                    member.role = request.role();
-                                    return memberRepository.persist(member);
-                                }))
-                .onItem().transform(mapper::toResponse);
-    }
-
-    @WithTransaction
-    public Uni<MemberResponse> changeMemberRole(Long organizationId, Long targetUserId, Long callerId, ChangeMemberRoleRequest request) {
-        return requireAdmin(organizationId, callerId)
-                .onItem().transformToUni(ignored ->
-                        memberRepository.findActiveByOrganizationIdAndUserId(organizationId, targetUserId))
-                .onItem().transformToUni(opt -> {
-                    if (opt.isEmpty()) throw new ForbiddenException();
-                    OrganizationMember member = opt.get();
-                    member.role = request.role();
-                    return memberRepository.persist(member);
-                })
-                .onItem().transform(mapper::toResponse);
-    }
-
-    @WithTransaction
-    public Uni<Void> removeMember(Long organizationId, Long targetUserId, Long callerId) {
-        return requireAdmin(organizationId, callerId)
-                .onItem().transformToUni(ignored ->
-                        memberRepository.findActiveByOrganizationIdAndUserId(organizationId, targetUserId))
-                .onItem().transformToUni(opt -> {
-                    if (opt.isEmpty()) throw new ForbiddenException();
-                    OrganizationMember member = opt.get();
-                    member.status = MemberStatus.Removed;
-                    return memberRepository.persist(member);
-                })
-                .onItem().transform(m -> null);
-    }
-
-    private Uni<Void> requireAdmin(Long organizationId, Long userId) {
-        return memberRepository.isAdmin(organizationId, userId)
-                .onItem().transformToUni(isAdmin -> {
-                    if (!isAdmin) throw new ForbiddenException();
-                    return Uni.createFrom().voidItem();
-                });
-    }
-
-    private Uni<Void> requireMember(Long organizationId, Long userId) {
-        return memberRepository.isMember(organizationId, userId)
-                .onItem().transformToUni(isMember -> {
-                    if (!isMember) throw new ForbiddenException();
-                    return Uni.createFrom().voidItem();
-                });
     }
 }
