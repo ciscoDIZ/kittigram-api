@@ -32,6 +32,9 @@ public class JwtAuthFilter {
     public Uni<Response> filter(ContainerRequestContext ctx) {
         String method = ctx.getMethod();
         String path = ctx.getUriInfo().getPath();
+        if (!path.startsWith("/")) {
+            path = "/" + path;
+        }
         String auth = ctx.getHeaderString("Authorization");
 
         Log.infof("Gateway request: %s %s - Auth: %s", method, path, auth != null ? "present" : "missing");
