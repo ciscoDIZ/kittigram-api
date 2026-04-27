@@ -16,7 +16,7 @@ public class GrpcAuthInterceptor implements ServerInterceptor {
     static final Metadata.Key<String> TOKEN_KEY =
             Metadata.Key.of("x-internal-token", Metadata.ASCII_STRING_MARSHALLER);
 
-    @ConfigProperty(name = "grpc.internal.secret")
+    @ConfigProperty(name = "kitties.internal.secret")
     String secret;
 
     @Override
