@@ -6,7 +6,6 @@ import java.time.LocalDateTime;
 
 @Entity
 @Table(name = "cats", schema = "cats")
-@SequenceGenerator(name = "cats_seq_gen", sequenceName = "cats_SEQ", schema = "cats", allocationSize = 50)
 public class Cat extends PanacheEntity {
 
     @Column(nullable = false)
