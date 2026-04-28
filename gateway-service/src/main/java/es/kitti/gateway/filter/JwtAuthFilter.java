@@ -32,6 +32,8 @@ public class JwtAuthFilter {
             Pattern.compile("GET:/swagger-ui/.*")
     );
 
+    private static final Pattern INTERNAL_PATH = Pattern.compile("^/api/[^/]+/internal(/.*)?$");
+
     @ServerRequestFilter
     public Uni<Response> filter(ContainerRequestContext ctx) {
         String method = ctx.getMethod();
@@ -42,6 +44,14 @@ public class JwtAuthFilter {
         String auth = ctx.getHeaderString("Authorization");
 
         Log.infof("Gateway request: %s %s - Auth: %s", method, path, auth != null ? "present" : "missing");
+
+        if (INTERNAL_PATH.matcher(path).matches()) {
+            return Uni.createFrom().item(
+                    Response.status(Response.Status.NOT_FOUND)
+                            .entity("{\"status\":404,\"message\":\"Not found\"}")
+                            .build()
+            );
+        }
 
         String key = method + ":" + path;
 

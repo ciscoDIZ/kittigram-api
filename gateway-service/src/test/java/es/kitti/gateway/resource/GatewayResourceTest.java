@@ -317,6 +317,36 @@ class GatewayResourceTest {
     }
 
     @Test
+    void testInternalPathBlocked_organizations() {
+        given()
+                .header("Authorization", "Bearer test-token")
+                .header("X-Internal-Token", "should-not-help")
+                .when()
+                .get("/api/organizations/internal/by-region/Madrid")
+                .then()
+                .statusCode(404);
+    }
+
+    @Test
+    void testInternalPathBlocked_cats() {
+        given()
+                .header("Authorization", "Bearer test-token")
+                .when()
+                .get("/api/cats/internal/ping")
+                .then()
+                .statusCode(404);
+    }
+
+    @Test
+    void testInternalPathBlocked_withoutAuth() {
+        given()
+                .when()
+                .get("/api/cats/internal/ping")
+                .then()
+                .statusCode(404);
+    }
+
+    @Test
     void testGenericPatchRouted() {
         wiremock.register(patch(urlEqualTo("/adoptions/1/status"))
                 .willReturn(aResponse()
