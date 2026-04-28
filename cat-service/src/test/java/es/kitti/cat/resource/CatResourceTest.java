@@ -64,7 +64,33 @@ class CatResourceTest {
             @Claim(key = "sub", value = "1"),
             @Claim(key = "email", value = "test@kitti.es")
     })
-    void testCreateCatAuthenticated() {
+    void testCreateCatAsRegularUserForbidden() {
+        given()
+                .contentType(ContentType.JSON)
+                .body("""
+                {
+                    "name": "Peluso",
+                    "age": 2,
+                    "sex": "Male",
+                    "neutered": true,
+                    "city": "La Orotava",
+                    "region": "Tenerife",
+                    "country": "España"
+                }
+                """)
+                .when()
+                .post("/cats")
+                .then()
+                .statusCode(403);
+    }
+
+    @Test
+    @TestSecurity(user = "1", roles = "Organization")
+    @JwtSecurity(claims = {
+            @Claim(key = "sub", value = "1"),
+            @Claim(key = "email", value = "test@kitti.es")
+    })
+    void testCreateCatAsOrganization() {
         given()
                 .contentType(ContentType.JSON)
                 .body("""
@@ -92,7 +118,21 @@ class CatResourceTest {
             @Claim(key = "sub", value = "1"),
             @Claim(key = "email", value = "test@kitti.es")
     })
-    void testDeleteCatNotOwner() {
+    void testDeleteCatAsRegularUserForbidden() {
+        given()
+                .when()
+                .delete("/cats/999999")
+                .then()
+                .statusCode(403);
+    }
+
+    @Test
+    @TestSecurity(user = "1", roles = "Organization")
+    @JwtSecurity(claims = {
+            @Claim(key = "sub", value = "1"),
+            @Claim(key = "email", value = "test@kitti.es")
+    })
+    void testDeleteCatAsOrganizationNotFound() {
         given()
                 .when()
                 .delete("/cats/999999")
