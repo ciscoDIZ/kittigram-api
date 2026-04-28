@@ -5,6 +5,8 @@ import jakarta.ws.rs.ForbiddenException;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.ext.ExceptionMapper;
 import jakarta.ws.rs.ext.Provider;
+import es.kitti.adoption.intake.exception.IntakeRequestNotFoundException;
+import es.kitti.adoption.intake.exception.InvalidIntakeStatusException;
 
 import java.time.LocalDateTime;
 
@@ -31,6 +33,16 @@ public class GlobalExceptionMapper implements ExceptionMapper<Throwable> {
                     .build();
         }
         if (exception instanceof CatNotAvailableException) {
+            return Response.status(Response.Status.CONFLICT)
+                    .entity(new ErrorResponse(409, exception.getMessage()))
+                    .build();
+        }
+        if (exception instanceof IntakeRequestNotFoundException) {
+            return Response.status(Response.Status.NOT_FOUND)
+                    .entity(new ErrorResponse(404, exception.getMessage()))
+                    .build();
+        }
+        if (exception instanceof InvalidIntakeStatusException) {
             return Response.status(Response.Status.CONFLICT)
                     .entity(new ErrorResponse(409, exception.getMessage()))
                     .build();
