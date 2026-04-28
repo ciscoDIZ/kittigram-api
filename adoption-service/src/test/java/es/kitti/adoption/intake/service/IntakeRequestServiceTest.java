@@ -2,6 +2,8 @@ package es.kitti.adoption.intake.service;
 
 import io.smallrye.mutiny.Uni;
 import jakarta.ws.rs.ForbiddenException;
+import es.kitti.adoption.intake.client.OrganizationClient;
+import es.kitti.adoption.intake.client.OrganizationPublicMinimal;
 import es.kitti.adoption.intake.dto.IntakeDecisionRequest;
 import es.kitti.adoption.intake.dto.IntakeRequestCreateRequest;
 import es.kitti.adoption.intake.dto.IntakeRequestResponse;
@@ -23,6 +25,7 @@ import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.when;
 
 @ExtendWith(MockitoExtension.class)
@@ -34,6 +37,9 @@ class IntakeRequestServiceTest {
     @Mock
     IntakeMapper mapper;
 
+    @Mock
+    OrganizationClient organizationClient;
+
     @InjectMocks
     IntakeRequestService service;
 
@@ -42,6 +48,8 @@ class IntakeRequestServiceTest {
 
     @BeforeEach
     void setUp() {
+        service.internalSecret = "test-secret";
+
         pending = new IntakeRequest();
         pending.id = 1L;
         pending.userId = 100L;
@@ -154,8 +162,12 @@ class IntakeRequestServiceTest {
     }
 
     @Test
-    void reject_pendingAndOwner_success() {
+    void reject_pendingAndOwner_returnsRejectionWithFilteredAlternatives() {
         var decision = new IntakeDecisionRequest("Out of capacity");
+        var rejectingOrg = new OrganizationPublicMinimal(
+                200L, "Rejecting Org", "La Orotava", "Santa Cruz de Tenerife", "+34", "r@kitti.es");
+        var alt = new OrganizationPublicMinimal(
+                201L, "Other Org", "La Laguna", "Santa Cruz de Tenerife", "+34", "o@kitti.es");
 
         when(repository.findById(1L))
                 .thenReturn(Uni.createFrom().item(pending));
@@ -163,13 +175,37 @@ class IntakeRequestServiceTest {
                 .thenReturn(Uni.createFrom().item(pending));
         when(mapper.toResponse(any(IntakeRequest.class)))
                 .thenReturn(pendingResponse);
+        when(organizationClient.findByRegion(eq("Santa Cruz de Tenerife"), eq("test-secret")))
+                .thenReturn(Uni.createFrom().item(List.of(rejectingOrg, alt)));
 
-        assertDoesNotThrow(() ->
-                service.reject(1L, decision, 200L).await().indefinitely()
-        );
+        var result = service.reject(1L, decision, 200L).await().indefinitely();
+
         assertEquals(IntakeStatus.Rejected, pending.status);
         assertEquals("Out of capacity", pending.rejectionReason);
         assertNotNull(pending.decidedAt);
+        assertEquals(1, result.alternatives().size(), "rejecting org must be excluded");
+        assertEquals(201L, result.alternatives().get(0).id());
+        assertNotNull(result.intake());
+    }
+
+    @Test
+    void reject_clientFails_returnsRejectionWithEmptyAlternatives() {
+        var decision = new IntakeDecisionRequest("nope");
+
+        when(repository.findById(1L))
+                .thenReturn(Uni.createFrom().item(pending));
+        when(repository.<IntakeRequest>persist(any(IntakeRequest.class)))
+                .thenReturn(Uni.createFrom().item(pending));
+        when(mapper.toResponse(any(IntakeRequest.class)))
+                .thenReturn(pendingResponse);
+        when(organizationClient.findByRegion(any(), any()))
+                .thenReturn(Uni.createFrom().failure(new RuntimeException("organization-service down")));
+
+        var result = service.reject(1L, decision, 200L).await().indefinitely();
+
+        assertEquals(IntakeStatus.Rejected, pending.status);
+        assertTrue(result.alternatives().isEmpty(),
+                "client failure must not break the rejection itself");
     }
 
     @Test

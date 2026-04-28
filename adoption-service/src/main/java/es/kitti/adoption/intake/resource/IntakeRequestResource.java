@@ -9,6 +9,7 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import es.kitti.adoption.intake.dto.IntakeDecisionRequest;
+import es.kitti.adoption.intake.dto.IntakeRejectionResponse;
 import es.kitti.adoption.intake.dto.IntakeRequestCreateRequest;
 import es.kitti.adoption.intake.dto.IntakeRequestResponse;
 import es.kitti.adoption.intake.service.IntakeRequestService;
@@ -63,8 +64,8 @@ public class IntakeRequestResource {
     @PATCH
     @Path("/{id}/reject")
     @RolesAllowed("Organization")
-    public Uni<IntakeRequestResponse> reject(@PathParam("id") Long id,
-                                             @Valid IntakeDecisionRequest decision) {
+    public Uni<IntakeRejectionResponse> reject(@PathParam("id") Long id,
+                                               @Valid IntakeDecisionRequest decision) {
         Long callerOrgId = Long.parseLong(jwt.getSubject());
         return service.reject(id, decision, callerOrgId);
     }
