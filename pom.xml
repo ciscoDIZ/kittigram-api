@@ -29,6 +29,7 @@
         <module>adoption-service</module>
         <module>form-analysis-service</module>
         <module>organization-service</module>
+        <module>chat-service</module>
     </modules>
 
     <dependencyManagement>
