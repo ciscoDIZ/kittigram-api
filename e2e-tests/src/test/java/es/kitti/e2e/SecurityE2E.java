@@ -180,6 +180,27 @@ class SecurityE2E {
     }
 
     @Test
+    void gateway_internalEndpoints_returns404_noToken() {
+        // Defense-in-depth from adoption restructure phase 2b: /internal paths
+        // must never be reachable through the gateway, regardless of auth state.
+        given()
+        .when()
+            .get("/api/organizations/internal/by-region/Madrid")
+        .then()
+            .statusCode(404);
+    }
+
+    @Test
+    void gateway_internalEndpoints_returns404_withBearerToken() {
+        given()
+            .header("Authorization", "Bearer " + orgToken)
+        .when()
+            .get("/api/organizations/internal/by-region/Madrid")
+        .then()
+            .statusCode(404);
+    }
+
+    @Test
     void response_containsNoSniffHeader() {
         given()
         .when()

@@ -17,6 +17,13 @@ public class E2EConfig {
     public static final String MAILHOG_URL = System.getenv().getOrDefault("MAILHOG_URL", "http://localhost:8025");
     public static final String FRONTEND_URL = System.getenv().getOrDefault("FRONTEND_URL", "http://localhost:5173");
 
+    // Direct (no-gateway) URL for chat-service. Used to seed conversations from tests
+    // until adoption-service auto-creates them on intake approval (project_chat_auto_create_on_approve_debt).
+    public static final String CHAT_DIRECT_URL = System.getenv().getOrDefault("CHAT_DIRECT_URL", "http://localhost:8089");
+
+    // Shared secret for service-to-service calls (CLAUDE.md: kitties.internal.secret).
+    public static final String INTERNAL_SECRET = System.getenv().getOrDefault("KITTIES_INTERNAL_SECRET", "kitties-dev-secret");
+
     // 4-second per-request timeout — avoids hanging when the downstream service isn't ready
     private static final HttpClient HTTP = HttpClient.newBuilder()
             .connectTimeout(Duration.ofSeconds(4))
