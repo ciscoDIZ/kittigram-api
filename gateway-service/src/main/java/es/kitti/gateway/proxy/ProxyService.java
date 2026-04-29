@@ -84,6 +84,7 @@ public class ProxyService {
         if (path.startsWith("/api/cats")) return catServiceUrl;
         if (path.startsWith("/api/storage")) return storageServiceUrl;
         if (path.startsWith("/api/adoptions")) return adoptionServiceUrl;
+        if (path.startsWith("/api/intake-requests")) return adoptionServiceUrl;
         if (path.startsWith("/api/organizations")) return organizationServiceUrl;
         if (path.startsWith("/api/chats")) return chatServiceUrl;
         return null;

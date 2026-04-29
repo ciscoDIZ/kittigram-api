@@ -10,12 +10,19 @@ import java.util.Map;
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
 
+/**
+ * Cats are owned by Organizations after the adoption restructure (2026-04-29).
+ * Each user-with-role-Organization creates an Organization entity at registration time;
+ * cat ownership is keyed on the JWT subject of the Organization-role user.
+ */
 @TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class CatE2E {
 
     private static final long TS = System.currentTimeMillis();
-    private static final String OWNER_EMAIL = "cat_owner_" + TS + "@e2e.test";
-    private static final String OTHER_EMAIL = "cat_other_" + TS + "@e2e.test";
+
+    private static final String OWNER_ORG_EMAIL = "cat_owner_org_" + TS + "@e2e.test";
+    private static final String OTHER_ORG_EMAIL = "cat_other_org_" + TS + "@e2e.test";
+    private static final String PLAIN_USER_EMAIL = "cat_user_" + TS + "@e2e.test";
     private static final String PASSWORD = "Password1!";
 
     private static final byte[] TINY_JPEG = new byte[]{
@@ -27,8 +34,9 @@ class CatE2E {
 
     private static final String TEST_IP = "cat-test-" + TS;
 
-    private static String ownerToken;
-    private static String otherToken;
+    private static String ownerOrgToken;
+    private static String otherOrgToken;
+    private static String plainUserToken;
     private static Long catId;
     private static Long imageId;
 
@@ -36,17 +44,26 @@ class CatE2E {
     static void setup() {
         E2EConfig.waitForStack();
 
-        register(OWNER_EMAIL, "Owner", "Cat");
-        register(OTHER_EMAIL, "Other", "User");
+        register(OWNER_ORG_EMAIL, "Owner", "Org", "Organization");
+        register(OTHER_ORG_EMAIL, "Other", "Org", "Organization");
+        register(PLAIN_USER_EMAIL, "Plain", "User", "User");
 
-        activate(OWNER_EMAIL);
-        activate(OTHER_EMAIL);
+        activate(OWNER_ORG_EMAIL);
+        activate(OTHER_ORG_EMAIL);
+        activate(PLAIN_USER_EMAIL);
 
-        ownerToken = login(OWNER_EMAIL, PASSWORD);
-        otherToken = login(OTHER_EMAIL, PASSWORD);
+        ownerOrgToken = login(OWNER_ORG_EMAIL, PASSWORD);
+        otherOrgToken = login(OTHER_ORG_EMAIL, PASSWORD);
+        plainUserToken = login(PLAIN_USER_EMAIL, PASSWORD);
+
+        // Each org-role user must own an Organization entity so that intake/by-region
+        // queries don't drift; the cat-service itself only checks the JWT sub, but
+        // keeping the entity around mirrors production reality.
+        createOrganization(ownerOrgToken, "Owner Org " + TS, "Madrid", "Madrid");
+        createOrganization(otherOrgToken, "Other Org " + TS, "Madrid", "Madrid");
     }
 
-    // --- GET /cats (public search) ---
+    // --- Public reads ---
 
     @Test @Order(1)
     void searchCats_noToken_returns200() {
@@ -67,7 +84,7 @@ class CatE2E {
             .statusCode(200);
     }
 
-    // --- POST /cats ---
+    // --- POST /cats — lockdown: only Organization ---
 
     @Test @Order(3)
     void createCat_noToken_returns401() {
@@ -82,10 +99,23 @@ class CatE2E {
     }
 
     @Test @Order(4)
+    void createCat_asPlainUser_returns403() {
+        given()
+            .contentType(ContentType.JSON)
+            .header("Authorization", "Bearer " + plainUserToken)
+            .body(Map.of("name", "Luna", "age", 2, "sex", "Female",
+                    "city", "Madrid", "country", "Spain"))
+        .when()
+            .post("/api/cats")
+        .then()
+            .statusCode(403);
+    }
+
+    @Test @Order(5)
     void createCat_missingRequiredField_returns400() {
         given()
             .contentType(ContentType.JSON)
-            .header("Authorization", "Bearer " + ownerToken)
+            .header("Authorization", "Bearer " + ownerOrgToken)
             .body(Map.of("age", 2, "sex", "Female", "city", "Madrid", "country", "Spain"))
         .when()
             .post("/api/cats")
@@ -93,11 +123,11 @@ class CatE2E {
             .statusCode(400);
     }
 
-    @Test @Order(5)
-    void createCat_valid_returns201WithFields() {
+    @Test @Order(6)
+    void createCat_asOrganization_returns201WithFields() {
         var response = given()
             .contentType(ContentType.JSON)
-            .header("Authorization", "Bearer " + ownerToken)
+            .header("Authorization", "Bearer " + ownerOrgToken)
             .body(Map.of(
                 "name", "Luna",
                 "age", 2,
@@ -125,7 +155,7 @@ class CatE2E {
 
     // --- GET /cats/{id} (public) ---
 
-    @Test @Order(6)
+    @Test @Order(7)
     void getCat_byId_noToken_returns200() {
         given()
         .when()
@@ -136,7 +166,7 @@ class CatE2E {
             .body("name", equalTo("Luna"));
     }
 
-    @Test @Order(7)
+    @Test @Order(8)
     void getCat_notFound_returns404() {
         given()
         .when()
@@ -147,7 +177,7 @@ class CatE2E {
 
     // --- GET /cats with city filter matching created cat ---
 
-    @Test @Order(8)
+    @Test @Order(9)
     void searchCats_byCityMadrid_containsCreatedCat() {
         given()
             .queryParam("city", "Madrid")
@@ -158,13 +188,13 @@ class CatE2E {
             .body("id", hasItem(catId.intValue()));
     }
 
-    // --- PUT /cats/{id} ---
+    // --- PUT /cats/{id} — only the owning org ---
 
-    @Test @Order(9)
-    void updateCat_otherUser_returns403() {
+    @Test @Order(10)
+    void updateCat_otherOrg_returns403() {
         given()
             .contentType(ContentType.JSON)
-            .header("Authorization", "Bearer " + otherToken)
+            .header("Authorization", "Bearer " + otherOrgToken)
             .body(Map.of("name", "Hacker"))
         .when()
             .put("/api/cats/" + catId)
@@ -172,11 +202,23 @@ class CatE2E {
             .statusCode(403);
     }
 
-    @Test @Order(10)
+    @Test @Order(11)
+    void updateCat_plainUser_returns403() {
+        given()
+            .contentType(ContentType.JSON)
+            .header("Authorization", "Bearer " + plainUserToken)
+            .body(Map.of("name", "Hacker"))
+        .when()
+            .put("/api/cats/" + catId)
+        .then()
+            .statusCode(403);
+    }
+
+    @Test @Order(12)
     void updateCat_owner_returns200WithUpdatedFields() {
         given()
             .contentType(ContentType.JSON)
-            .header("Authorization", "Bearer " + ownerToken)
+            .header("Authorization", "Bearer " + ownerOrgToken)
             .body(Map.of("name", "Luna Updated", "description", "Very cute"))
         .when()
             .put("/api/cats/" + catId)
@@ -188,10 +230,10 @@ class CatE2E {
 
     // --- POST /cats/{id}/images ---
 
-    @Test @Order(11)
-    void uploadImage_otherUser_returns403() {
+    @Test @Order(13)
+    void uploadImage_otherOrg_returns403() {
         given()
-            .header("Authorization", "Bearer " + otherToken)
+            .header("Authorization", "Bearer " + otherOrgToken)
             .header("X-Forwarded-For", TEST_IP)
             .multiPart("file", "cat.jpg", TINY_JPEG, "image/jpeg")
         .when()
@@ -200,10 +242,10 @@ class CatE2E {
             .statusCode(403);
     }
 
-    @Test @Order(12)
+    @Test @Order(14)
     void uploadImage_owner_returns200WithImage() {
         var response = given()
-            .header("Authorization", "Bearer " + ownerToken)
+            .header("Authorization", "Bearer " + ownerOrgToken)
             .header("X-Forwarded-For", TEST_IP)
             .multiPart("file", "cat.jpg", TINY_JPEG, "image/jpeg")
         .when()
@@ -218,20 +260,20 @@ class CatE2E {
 
     // --- DELETE /cats/{catId}/images/{imageId} ---
 
-    @Test @Order(13)
-    void deleteImage_otherUser_returns403() {
+    @Test @Order(15)
+    void deleteImage_otherOrg_returns403() {
         given()
-            .header("Authorization", "Bearer " + otherToken)
+            .header("Authorization", "Bearer " + otherOrgToken)
         .when()
             .delete("/api/cats/" + catId + "/images/" + imageId)
         .then()
             .statusCode(403);
     }
 
-    @Test @Order(14)
+    @Test @Order(16)
     void deleteImage_owner_returns204() {
         given()
-            .header("Authorization", "Bearer " + ownerToken)
+            .header("Authorization", "Bearer " + ownerOrgToken)
         .when()
             .delete("/api/cats/" + catId + "/images/" + imageId)
         .then()
@@ -240,27 +282,27 @@ class CatE2E {
 
     // --- DELETE /cats/{id} ---
 
-    @Test @Order(15)
-    void deleteCat_otherUser_returns403() {
+    @Test @Order(17)
+    void deleteCat_otherOrg_returns403() {
         given()
-            .header("Authorization", "Bearer " + otherToken)
+            .header("Authorization", "Bearer " + otherOrgToken)
         .when()
             .delete("/api/cats/" + catId)
         .then()
             .statusCode(403);
     }
 
-    @Test @Order(16)
+    @Test @Order(18)
     void deleteCat_owner_returns204() {
         given()
-            .header("Authorization", "Bearer " + ownerToken)
+            .header("Authorization", "Bearer " + ownerOrgToken)
         .when()
             .delete("/api/cats/" + catId)
         .then()
             .statusCode(204);
     }
 
-    @Test @Order(17)
+    @Test @Order(19)
     void getCat_afterDelete_returns404() {
         given()
         .when()
@@ -271,10 +313,10 @@ class CatE2E {
 
     // --- helpers ---
 
-    private static void register(String email, String name, String surname) {
+    private static void register(String email, String name, String surname, String role) {
         given().contentType(ContentType.JSON)
             .body(Map.of("email", email, "password", PASSWORD,
-                "name", name, "surname", surname, "role", "User"))
+                "name", name, "surname", surname, "role", role))
             .post("/api/users").then().statusCode(201);
     }
 
@@ -291,5 +333,12 @@ class CatE2E {
             .body(Map.of("email", email, "password", password))
             .post("/api/auth/login").then().statusCode(200)
             .extract().jsonPath().getString("accessToken");
+    }
+
+    private static void createOrganization(String token, String name, String city, String region) {
+        given().contentType(ContentType.JSON)
+            .header("Authorization", "Bearer " + token)
+            .body(Map.of("name", name, "city", city, "region", region, "country", "Spain"))
+            .post("/api/organizations").then().statusCode(201);
     }
 }
