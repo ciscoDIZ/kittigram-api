@@ -1520,6 +1520,53 @@ docker exec -it kittigram-postgres-1 psql -U kittigram -d kittigram -c "\dt cats
 
 ## Historial de Sesiones
 
+### Sesión 2026-04-28/29 — Reestructuración adopción + chat-service
+
+**Contexto**: aplicar la decisión de negocio del 2026-04-27 (solo las protectoras publican gatos; los usuarios entran por un flujo de "ingreso" previo). Plan acordado en 3 fases (1 cat-lockdown, 2a/b/c intake en adoption-service, 3 chat-service nuevo).
+
+**Bloque 1 — Fase 1 (`feat/cat-publishing-org-only`, mergeada)**
+- `CatResource`: `POST /cats` y mutaciones restringidas a `@RolesAllowed("Organization")`. `ownerOrgId` viene del JWT, no del body.
+- Sin migración de datos legados (decisión: BD aún no en prod, se destruye y recrea).
+
+**Bloque 2 — Fase 2a (`feat/adoption-intake-flow`, mergeada)**
+- Nuevo agregado `IntakeRequest` (paquete `adoption-service/intake/`, deliberadamente separado del agregado `AdoptionRequest`). Estados `Pending`/`Approved`/`Rejected`.
+- Endpoints: `POST /intake-requests` (User), `GET /intake-requests/mine` (User), `GET /intake-requests/organization` (Organization, id desde JWT — alineado con el patrón de `AdoptionResource`, no con el path literal del plan), `PATCH /intake-requests/{id}/approve|reject`.
+- Migración Flyway V2 con `intake_requests`. `GlobalExceptionMapper` extendido con `IntakeRequestNotFoundException` (404) y `InvalidIntakeStatusException` (409).
+- Tests: 10 unit (Mockito) + 10 integración (`@QuarkusTest` + `@TestSecurity`).
+
+**Bloque 3 — Fase 2b (`feat/intake-org-lookup`, mergeada)**
+- `organization-service`: clonado el patrón `@InternalOnly` + `InternalTokenFilter` de `cat-service`. Nuevo `OrganizationInternalResource` con `GET /organizations/internal/by-region/{region}` que devuelve un DTO público mínimo (`OrganizationPublicMinimalResponse`).
+- `gateway-service`: bloqueo explícito de `^/api/[^/]+/internal(/.*)?$` con 404 antes de auth (defensa en profundidad — afecta también a `/api/cats/internal/*`).
+- `adoption-service`: `quarkus-rest-client-jackson` añadido. `OrganizationClient` (`@RegisterRestClient`) listo para consumir el endpoint con header `X-Internal-Token`. Properties `kitties.internal.secret` y `quarkus.rest-client.organization-service.url`.
+- Tests: 4 nuevos en organization-service, 3 en gateway-service. El cliente sin consumidor no se testea aquí (se cubre en 2c).
+
+**Bloque 4 — Fase 2c (`feat/intake-rejection-alternatives`, mergeada)**
+- `IntakeRequestService.reject(...)` ahora devuelve `IntakeRejectionResponse(intake, alternatives)`. Tras persistir el rechazo llama a `OrganizationClient.findByRegion(region, secret)`, filtra la org que rechazó y devuelve la lista.
+- **Tolerancia a fallos**: si el cliente HTTP falla (`organization-service` caído), se devuelve la rejection con `alternatives = []` y un `Log.warnf`. La rejection no debe revertirse por un fallo de lookup.
+- Tests: 2 nuevos en service (alternativas filtradas + tolerancia a fallo). El happy path end-to-end del resource necesita 2 contextos de seguridad distintos (User para POST, Organization para PATCH) en el mismo test → no factible con `@TestSecurity`; cobertura suficiente vía service test mockeando el cliente.
+
+**Bloque 5 — Fase 3 bases (`feat/chat-service`, PR pendiente)**
+- Módulo Maven nuevo en puerto **8089**, esquema `chat`. Añadido al pom raíz y al routing del gateway (`/api/chats/*` → chat-service).
+- Dominio: `Conversation` (1 por intake aprobada, UNIQUE `intake_request_id`) + `Message` con `SenderType` (User/Organization).
+- REST público (JWT, role-aware): `GET /chats/mine` (User), `GET /chats/organization` (Organization), `GET /chats/{id}/messages`, `POST /chats/{id}/messages`. Check de participación y `lastMessageAt` bumping en send.
+- REST interno: `POST /chats/internal/conversations` (`@InternalOnly`) — bases listas para que `adoption-service.IntakeRequestService.approve(...)` abra la conversación; el cableado cross-service queda como deuda.
+- **Ban en chat (opción A de moderación)**: tabla `chat.blocked_participants(organization_id, user_id)`, scope = pareja (no por conversación). `POST /chats/{id}/block` y `DELETE /chats/{id}/block` (Organization, idempotentes). `sendMessage` desde User → 403 si la pareja está bloqueada; lectura sigue abierta. Las opciones B (ban global en user-service) y C (`moderation-service` propio) descartadas por ahora — quedan en deuda para cuando aparezca un caso real.
+- Tests: 33 verdes (17 service + 12 resource + 4 internal).
+
+**Decisiones recurrentes a lo largo del plan**:
+- Cada fase en rama propia y PR independiente. Ninguna fase posterior se empezó sin que la anterior estuviese mergeada a `main`.
+- Path de endpoints alineado con patrones existentes (e.g. `/intake-requests/organization` en vez del literal `/organizations/{id}/intake-requests` del plan) cuando el patrón vigente era más limpio.
+- Tolerancia a fallos en lookups cross-service (no romper la operación principal por un fallo de un servicio satélite).
+
+**Deuda registrada**:
+- WebSocket en chat-service (`feat/chat-websocket` futuro): hoy solo REST.
+- Auto-creación de `Conversation` desde `IntakeRequestService.approve(...)`: `OrganizationClient` patrón replicable, falta `ChatClient` + invocación.
+- Ban global de usuario (`UserStatus.Banned`): pendiente del primer caso real.
+
+**Estado al cierre**: fases 1, 2a, 2b, 2c mergeadas a `main`. Fase 3 (`feat/chat-service`) lista para PR. Sin tests rotos en ningún módulo afectado.
+
+---
+
 ### Sesión 2026-04-23/24 — Seguridad + Flyway
 
 **Contexto**: dos ramas paralelas de trabajo: controles de seguridad en `security` y migraciones de base de datos en `feat/flyway-migrations`.

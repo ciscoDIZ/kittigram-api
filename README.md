@@ -155,6 +155,38 @@ Roles are enforced via `@RolesAllowed` (SmallRye JWT `groups` claim). Ownership 
 - `adoption-form-submitted` (outgoing) — screening form data for analysis
 - `adoption-form-analysed` (incoming) — analysis decision (ACCEPTED / REJECTED)
 
+**Intake flow** (added 2026-04-28, lives under `intake/` package alongside the adoption aggregate):
+
+| Method  | Path                                  | Role           | Notes                                                                |
+|---------|---------------------------------------|----------------|----------------------------------------------------------------------|
+| `POST`  | `/intake-requests`                    | `User`         | User asks an organization to take in a cat (surrender)               |
+| `GET`   | `/intake-requests/mine`               | `User`         | My pending/approved/rejected intakes                                 |
+| `GET`   | `/intake-requests/organization`       | `Organization` | Intakes addressed to my organization                                 |
+| `PATCH` | `/intake-requests/{id}/approve`       | `Organization` | Approves the surrender (only Pending → Approved)                     |
+| `PATCH` | `/intake-requests/{id}/reject`        | `Organization` | Rejects with reason; response includes alternative organizations in the same region (looked up via `organization-service` internal endpoint, tolerates lookup failures) |
+
+---
+
+### chat-service — port 8089
+
+Conversations between an adopter and an organization, opened after an intake is approved. REST-only in v1 (WebSocket is upcoming). Each conversation is bound to one intake request.
+
+**Endpoints:**
+
+| Method  | Path                          | Role             | Notes                                                |
+|---------|-------------------------------|------------------|------------------------------------------------------|
+| `GET`   | `/chats/mine`                 | `User`           | My conversations                                     |
+| `GET`   | `/chats/organization`         | `Organization`   | Conversations for my organization                    |
+| `GET`   | `/chats/{id}/messages`        | Any (participant)| Message history; participant check at service layer  |
+| `POST`  | `/chats/{id}/messages`        | Any (participant)| Send message; bumps `lastMessageAt`                  |
+| `POST`  | `/chats/{id}/block`           | `Organization`   | Block the user on this org (idempotent)              |
+| `DELETE`| `/chats/{id}/block`           | `Organization`   | Unblock (idempotent)                                 |
+
+**Internal (service-to-service, `X-Internal-Token`)**:
+- `POST /chats/internal/conversations` — open a conversation `(intakeRequestId, userId, organizationId)`. Intended caller is `adoption-service` after an intake approval.
+
+**Moderation:** organizations can block a user via `(organizationId, userId)` pair (scope is the pair, not the conversation). Blocked users keep read access but their `POST /chats/{id}/messages` returns **403**. Global user bans (`UserStatus.Banned`) are deferred until a real case appears.
+
 ---
 
 ## Architecture
@@ -178,6 +210,9 @@ Three isolated networks. Only the gateway is reachable from the internet.
                         │  storage-service     :8083                  │
                         │  notification-service :8085                 │
                         │  adoption-service    :8086                  │
+                        │  form-analysis-service :8087                │
+                        │  organization-service :8088                 │
+                        │  chat-service        :8089                  │
                         └──────────────┬──────────────────────────────┘
                                        │
                         ┌──────────────▼──────────────────────────────┐
@@ -202,6 +237,9 @@ Implemented via Docker networks (dev/staging) or Kubernetes NetworkPolicy (produ
 | storage-service       | 8083  | —     |
 | notification-service  | 8085  | —     |
 | adoption-service      | 8086  | —     |
+| form-analysis-service | 8087  | —     |
+| organization-service  | 8088  | —     |
+| chat-service          | 8089  | —     |
 | PostgreSQL            | 5432  | —     |
 | MinIO API             | 9000  | —     |
 | MinIO Console         | 9001  | —     |
@@ -299,7 +337,7 @@ openssl rsa -pubout \
   -out auth-service/src/main/resources/publicKey.pem
 
 # Distribute public key to verifying services
-for svc in user-service cat-service gateway-service adoption-service; do
+for svc in user-service cat-service gateway-service adoption-service organization-service chat-service; do
   cp auth-service/src/main/resources/publicKey.pem $svc/src/main/resources/publicKey.pem
 done
 ```
@@ -307,7 +345,7 @@ done
 | File             | Services                                                                          | Profile   |
 |------------------|-----------------------------------------------------------------------------------|-----------|
 | `privateKey.pem` | `auth-service`                                                                    | dev / test |
-| `publicKey.pem`  | `auth-service`, `user-service`, `cat-service`, `gateway-service`, `adoption-service` | dev / test |
+| `publicKey.pem`  | `auth-service`, `user-service`, `cat-service`, `gateway-service`, `adoption-service`, `organization-service`, `chat-service` | dev / test |
 
 **In production** the keys are read from the filesystem, not from the classpath. Mount them as Docker Secrets or Kubernetes Secrets at `/run/secrets/` (or override with `JWT_PRIVATE_KEY_LOCATION` / `JWT_PUBLIC_KEY_LOCATION`).
 
@@ -333,11 +371,13 @@ Unit tests use plain Mockito (`@ExtendWith(MockitoExtension.class)`), no contain
 | storage-service       | 9    | 3           | Real MinIO via `QuarkusTestResourceLifecycleManager` |
 | gateway-service       | 2    | 23          | WireMock 1.6.1 DevService; Mockito para unit tests   |
 | notification-service  | 3    | 2           | MockMailbox + in-memory Kafka + Awaitility           |
-| adoption-service      | 17   | 9           | RBAC + ownership checks covered                      |
+| adoption-service      | 28   | 19          | RBAC + ownership; intake flow + rejection alternatives |
 | form-analysis-service | 8    | 3           | Rules engine + in-memory Kafka                       |
-| organization-service  | 14   | 11          | Plan-based member limits; @TestSecurity RBAC         |
+| organization-service  | 16   | 17          | Plan-based member limits; @TestSecurity RBAC; @InternalOnly by-region |
+| chat-service          | 17   | 16          | Conversations, messages, ban, internal create        |
+| gateway-service       | 2    | 26          | + internal path 404 + chat routing                   |
 
-**Total: 143 tests** (77 unit + 66 integration)
+**Total: ~225 tests**
 
 **End-to-end tests** run against the full live stack (all services + Docker infra):
 
@@ -495,7 +535,10 @@ Shelters distrust platforms that automate them out of control. The value proposi
 ### Priority 4 — Communication
 
 - [ ] **Notifications MVP** — extend `notification-service` to cover all adoption state transitions (already partially wired). Shelters and adopters receive email on every status change. This is sufficient for MVP.
-- [ ] **chat-service** (V2) — real-time WebSocket channel (org ↔ adopter), persistent history. Implemented as a separate service given its different connection model. Prioritize only once in-app communication is a validated pain point over email/WhatsApp.
+- [x] **chat-service** (REST bases) — port 8089. Conversation model (one per intake), REST endpoints for list/send/history, internal endpoint for adoption-service to open conversations, in-chat user blocking (org → user pair). Persistent history.
+- [ ] **chat-service** real-time transport — WebSocket on top of the existing REST surface (or long-poll if WebSocket gives trouble). REST currently requires polling.
+- [ ] **Auto-open conversation on intake approval** — wire `IntakeRequestService.approve(...)` in adoption-service to call `POST /chats/internal/conversations` (REST client + `kitties.internal.secret`).
+- [ ] **Global user ban** (`UserStatus.Banned`) — deferred until first real case of cross-conversation abuse. In-chat ban (org-scoped) is already live.
 
 ### Priority 5 — Adopter Growth & Self-funding
 
