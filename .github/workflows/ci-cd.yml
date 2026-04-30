@@ -1,0 +1,100 @@
+name: CI / CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      services: ${{ steps.filter.outputs.changes }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            user-service:
+              - 'user-service/**'
+              - 'pom.xml'
+            auth-service:
+              - 'auth-service/**'
+              - 'pom.xml'
+            cat-service:
+              - 'cat-service/**'
+              - 'pom.xml'
+            storage-service:
+              - 'storage-service/**'
+              - 'pom.xml'
+            notification-service:
+              - 'notification-service/**'
+              - 'pom.xml'
+            adoption-service:
+              - 'adoption-service/**'
+              - 'pom.xml'
+            form-analysis-service:
+              - 'form-analysis-service/**'
+              - 'pom.xml'
+            organization-service:
+              - 'organization-service/**'
+              - 'pom.xml'
+            gateway-service:
+              - 'gateway-service/**'
+              - 'pom.xml'
+
+  test:
+    needs: changes
+    if: needs.changes.outputs.services != '[]' && needs.changes.outputs.services != ''
+    name: Test (${{ matrix.service }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+          cache: maven
+
+      - name: Run tests
+        run: mvn test -pl ${{ matrix.service }} -B --no-transfer-progress
+
+  deploy:
+    name: Push (${{ matrix.service }})
+    needs: [changes, test]
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' &&
+      needs.test.result == 'success'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJson(needs.changes.outputs.services) }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: graalvm/setup-graalvm@v1
+        with:
+          java-version: '21'
+          distribution: 'graalvm-community'
+          native-image-job-reports: 'true'
+          cache: 'maven'
+
+      - name: Build and push native image
+        run: |
+          mvn package -pl ${{ matrix.service }} -Dnative -DskipTests -B --no-transfer-progress \
+            -Dquarkus.container-image.build=true \
+            -Dquarkus.container-image.push=true \
+            -Dquarkus.container-image.builder=docker \
+            -Dquarkus.container-image.username=${{ secrets.DOCKERHUB_USERNAME }} \
+            -Dquarkus.container-image.password=${{ secrets.DOCKERHUB_TOKEN }}

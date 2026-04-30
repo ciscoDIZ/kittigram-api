@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-# Kittigram — Claude Code Rules
+# Kitties — Claude Code Rules
 
 ## Stack
 - Java 21, Quarkus 3.34.3, Hibernate Reactive + Panache, SmallRye Mutiny

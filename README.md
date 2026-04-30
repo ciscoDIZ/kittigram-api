@@ -17,6 +17,7 @@ Microservices backend for Kitties, a cat adoption platform for shelters and vete
   - [Infrastructure](#infrastructure)
   - [Running services](#running-services)
   - [Security keys](#security-keys)
+- [Deployment](#deployment)
 - [Testing](#testing)
 - [Known Patterns](#known-patterns)
 - [Environment Variables](#environment-variables)
@@ -359,6 +360,72 @@ On Windows, run the commands above in Git Bash or WSL. To install OpenSSL via wi
 
 ---
 
+## Deployment
+
+Production deployment uses **Docker Compose** with all 9 services pre-built and pushed to Docker Hub by the CI/CD pipeline.
+
+### Prerequisites
+
+- Docker + Docker Compose v2
+- A Linux server with ports 80 and 443 open
+- Docker Hub account (for image push; can be replaced with any registry)
+- GitHub repository secrets: `DOCKERHUB_USERNAME`, `DOCKERHUB_TOKEN`
+
+### 1. Generate JWT keys
+
+```bash
+mkdir -p secrets
+openssl genrsa -out secrets/private.pem 4096
+openssl rsa -in secrets/private.pem -pubout -out secrets/public.pem
+```
+
+The `secrets/` directory is gitignored for `*.pem` files — never commit private keys.
+
+### 2. Configure environment
+
+```bash
+cp .env.example .env
+# Fill in DB_PASSWORD, MINIO_ROOT_PASSWORD, SMTP credentials, CORS_ORIGIN, etc.
+```
+
+See [Environment Variables](#environment-variables) for a full reference.
+
+### 3. Bootstrap SSL (first deploy only)
+
+Nginx requires the certificate to exist before it can start the HTTPS server block.
+Run Certbot in standalone mode once before bringing up the full stack:
+
+```bash
+docker compose -f docker-compose.prod.yml up -d postgres minio zookeeper kafka
+docker run --rm -p 80:80 \
+  -v kitties-prod_certbot_certs:/etc/letsencrypt \
+  -v kitties-prod_certbot_www:/var/www/certbot \
+  certbot/certbot certonly --standalone \
+  -d www.kitti.es --email ciscoadiz@gmail.com --agree-tos --no-eff-email
+```
+
+Subsequent renewals are handled automatically by the `certbot` service (every 12 h).
+
+### 4. Start the production stack
+
+```bash
+docker compose -f docker-compose.prod.yml up -d
+```
+
+This starts PostgreSQL 16, MinIO, Zookeeper, Kafka, all 9 application services, Nginx (ports 80/443), and the Certbot renewal daemon.
+Traffic enters via Nginx on **port 443** (HTTPS); HTTP redirects to HTTPS automatically.
+
+### CI/CD Pipeline
+
+The GitHub Actions workflow at `.github/workflows/ci-cd.yml` runs on every push to `main`:
+
+1. **Test matrix** — runs `mvn test` in parallel for all 9 services
+2. **Build & push** — builds Docker images and pushes to Docker Hub as `<DOCKERHUB_USERNAME>/kitties-<service>:latest`
+
+Pull requests trigger only the test matrix (no image push).
+
+---
+
 ## Testing
 
 Unit tests use plain Mockito (`@ExtendWith(MockitoExtension.class)`), no containers. Integration tests use `@QuarkusTest` + RestAssured with `%test.*` profiles in the main config.
@@ -510,7 +577,7 @@ Copy `.env.example` to `.env` and fill in all values. Variables marked **require
 - [x] Security audit completed (11 vulnerabilities found and fixed, score 5.5 → 8.5/10)
 - [x] JaCoCo configured across all modules (quarkus-jacoco + maven plugin in root pom)
 - [x] gateway-service instruction coverage at 100% (574/574); branch coverage 93.5% (4 unreachable branches in Vert.x WebClient code)
-- [ ] **CI/CD with GitHub Actions** — no pipeline exists; tests only run locally. Minimum: compile + test on push, JaCoCo report as PR artifact, OWASP Dependency Check + Trivy.
+- [x] **CI/CD with GitHub Actions** — test matrix across all 9 services on every push; Docker Hub image push on merge to `main`.
 - [x] **Flyway** — versioned SQL migrations per service, `migrate-at-start=true`, Hibernate in `validate` mode in production. All 6 database-backed services have V1 migrations (auth, user, cat, adoption, organization, form-analysis).
 - [ ] **Production Docker Compose** — prerequisite for any real deployment.
 - [ ] **Observability** — OpenTelemetry distributed traces, metrics, and centralized logs. No correlation IDs between services today; debugging a gateway → auth → adoption flow requires grepping logs manually.
