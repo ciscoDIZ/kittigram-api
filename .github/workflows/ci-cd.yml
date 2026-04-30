@@ -45,6 +45,9 @@ jobs:
             gateway-service:
               - 'gateway-service/**'
               - 'pom.xml'
+            chat-service:
+              - 'chat-service/**'
+              - 'pom.xml'
 
   test:
     needs: changes
@@ -98,3 +101,23 @@ jobs:
             -Dquarkus.container-image.builder=docker \
             -Dquarkus.container-image.username=${{ secrets.DOCKERHUB_USERNAME }} \
             -Dquarkus.container-image.password=${{ secrets.DOCKERHUB_TOKEN }}
+
+  rollout:
+    name: Deploy to production
+    needs: deploy
+    if: >-
+      github.ref == 'refs/heads/main' &&
+      github.event_name == 'push' &&
+      needs.deploy.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH and restart stack
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            cd /opt/kitties
+            docker compose -f docker-compose.prod.yml pull
+            docker compose -f docker-compose.prod.yml up -d --remove-orphans
