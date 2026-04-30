@@ -31,6 +31,15 @@ public class GlobalExceptionMapper implements ExceptionMapper<Throwable> {
                     .build();
         }
 
+        if (exception instanceof CatHasActiveAdoptionsException) {
+            return Response.status(Response.Status.CONFLICT)
+                    .entity(new ErrorResponse(
+                            Response.Status.CONFLICT.getStatusCode(),
+                            exception.getMessage()
+                    ))
+                    .build();
+        }
+
         if (exception instanceof IllegalArgumentException) {
             return Response.status(Response.Status.BAD_REQUEST)
                     .entity(new ErrorResponse(
