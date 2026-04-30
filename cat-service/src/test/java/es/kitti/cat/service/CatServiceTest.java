@@ -3,11 +3,12 @@ package es.kitti.cat.service;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
 import jakarta.ws.rs.ForbiddenException;
+import es.kitti.cat.client.AdoptionClient;
 import es.kitti.cat.client.StorageClient;
 import es.kitti.cat.dto.*;
 import es.kitti.cat.entity.Cat;
-import es.kitti.cat.entity.CatImage;
 import es.kitti.cat.entity.CatStatus;
+import es.kitti.cat.exception.CatHasActiveAdoptionsException;
 import es.kitti.cat.exception.CatNotFoundException;
 import es.kitti.cat.mapper.CatMapper;
 import es.kitti.cat.repository.CatImageRepository;
@@ -42,6 +43,9 @@ class CatServiceTest {
     @Mock
     StorageClient storageClient;
 
+    @Mock
+    AdoptionClient adoptionClient;
+
     @InjectMocks
     CatService catService;
 
@@ -62,7 +66,7 @@ class CatServiceTest {
         testCatResponse = new CatResponse(
                 1L, "Peluso", 2, "Male", null, true,
                 "Available", "La Orotava", "Tenerife", "España",
-                null, null, 10L, List.of(), // organizationId=10
+                null, null, 10L, List.of(),
                 LocalDateTime.now(), LocalDateTime.now()
         );
 
@@ -123,27 +127,47 @@ class CatServiceTest {
     }
 
     @Test
-    void deleteCat_ownerDeletes_success() {
-        CatImage image = new CatImage();
-        image.key = "some-key";
-
+    void findById_deletedCat_throwsCatNotFoundException() {
+        testCat.status = CatStatus.Deleted;
         when(catRepository.findById(1L))
                 .thenReturn(Uni.createFrom().item(testCat));
-        when(catImageRepository.findByCatId(1L))
-                .thenReturn(Multi.createFrom().items(image));
-        when(storageClient.delete("some-key"))
-                .thenReturn(Uni.createFrom().voidItem());
-        when(catImageRepository.deleteByCatId(1L))
-                .thenReturn(Uni.createFrom().voidItem());
-        when(catRepository.delete(testCat))
-                .thenReturn(Uni.createFrom().voidItem());
+
+        assertThrows(CatNotFoundException.class, () ->
+                catService.findById(1L).await().indefinitely()
+        );
+    }
+
+    @Test
+    void deleteCat_noActiveAdoptions_marksAsDeleted() {
+        when(catRepository.findById(1L))
+                .thenReturn(Uni.createFrom().item(testCat));
+        when(adoptionClient.hasActiveRequestsForCat(eq(1L), any()))
+                .thenReturn(Uni.createFrom().item(false));
+        when(catRepository.persist(any(Cat.class)))
+                .thenReturn(Uni.createFrom().item(testCat));
 
         assertDoesNotThrow(() ->
-                catService.deleteCat(1L, 10L)
-                        .await().indefinitely()
+                catService.deleteCat(1L, 10L).await().indefinitely()
         );
 
-        verify(catRepository).delete(testCat);
+        assertEquals(CatStatus.Deleted, testCat.status);
+        verify(catRepository).persist(testCat);
+        verify(catRepository, never()).delete(any(Cat.class));
+    }
+
+    @Test
+    void deleteCat_hasActiveAdoptions_throwsCatHasActiveAdoptionsException() {
+        when(catRepository.findById(1L))
+                .thenReturn(Uni.createFrom().item(testCat));
+        when(adoptionClient.hasActiveRequestsForCat(eq(1L), any()))
+                .thenReturn(Uni.createFrom().item(true));
+
+        assertThrows(CatHasActiveAdoptionsException.class, () ->
+                catService.deleteCat(1L, 10L).await().indefinitely()
+        );
+
+        verify(catRepository, never()).persist(any(Cat.class));
+        verify(catRepository, never()).delete(any(Cat.class));
     }
 
     @Test
@@ -168,6 +192,24 @@ class CatServiceTest {
                 catService.deleteCat(999L, 10L)
                         .await().indefinitely()
         );
+    }
+
+    @Test
+    void findMine_returnsAllOrgCatsIncludingDeleted() {
+        Cat deletedCat = new Cat();
+        deletedCat.id = 2L;
+        deletedCat.organizationId = 10L;
+        deletedCat.status = CatStatus.Deleted;
+
+        when(catRepository.findByOrganizationId(10L))
+                .thenReturn(Uni.createFrom().item(List.of(testCat, deletedCat)));
+        when(catMapper.toSummaryResponse(any(Cat.class)))
+                .thenReturn(testCatSummaryResponse);
+
+        var result = catService.findMine(10L).await().indefinitely();
+
+        assertEquals(2, result.size());
+        verify(catRepository).findByOrganizationId(10L);
     }
 
     @Test
