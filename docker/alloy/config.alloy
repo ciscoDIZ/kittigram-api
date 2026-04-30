@@ -1,0 +1,64 @@
+otelcol.receiver.otlp "default" {
+  grpc { endpoint = "0.0.0.0:4317" }
+  http { endpoint = "0.0.0.0:4318" }
+
+  output {
+    logs    = [otelcol.processor.filter.warn_plus.input]
+    metrics = [otelcol.exporter.prometheus.default.input]
+    traces  = [otelcol.exporter.otlphttp.tempo.input]
+  }
+}
+
+otelcol.processor.filter "warn_plus" {
+  error_mode = "ignore"
+
+  logs {
+    log_record = ["severity_number < SEVERITY_NUMBER_WARN"]
+  }
+
+  output {
+    logs = [otelcol.exporter.loki.default.input]
+  }
+}
+
+otelcol.exporter.loki "default" {
+  forward_to = [loki.write.grafana_cloud.receiver]
+}
+
+loki.write "grafana_cloud" {
+  endpoint {
+    url = env("GRAFANA_LOKI_URL")
+
+    basic_auth {
+      username = env("GRAFANA_LOKI_USER")
+      password = env("GRAFANA_API_KEY")
+    }
+  }
+}
+
+otelcol.exporter.prometheus "default" {
+  forward_to = [prometheus.remote_write.grafana_cloud.receiver]
+}
+
+prometheus.remote_write "grafana_cloud" {
+  endpoint {
+    url = env("GRAFANA_PROMETHEUS_URL")
+
+    basic_auth {
+      username = env("GRAFANA_PROMETHEUS_USER")
+      password = env("GRAFANA_API_KEY")
+    }
+  }
+}
+
+otelcol.exporter.otlphttp "tempo" {
+  client {
+    endpoint = env("GRAFANA_TEMPO_URL")
+    auth     = otelcol.auth.basic.tempo.handler
+  }
+}
+
+otelcol.auth.basic "tempo" {
+  username = env("GRAFANA_TEMPO_USER")
+  password = env("GRAFANA_API_KEY")
+}

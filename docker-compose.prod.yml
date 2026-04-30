@@ -1,0 +1,423 @@
+name: kitties-prod
+
+secrets:
+  jwt_private_key:
+    file: ./secrets/privateKey.pem
+  jwt_public_key:
+    file: ./secrets/publicKey.pem
+
+networks:
+  kitties-net:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  minio_data:
+  certbot_certs:
+  certbot_www:
+
+services:
+
+  # ─── Infrastructure ───────────────────────────────────────────────
+
+  postgres:
+    image: postgres:16
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: ${DB_NAME}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER} -d ${DB_NAME}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kitties-net
+
+  minio:
+    image: minio/minio:latest
+    command: server /data --address ":9000" --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - kitties-net
+
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+    healthcheck:
+      test: ["CMD-SHELL", "cub zk-ready localhost:2181 30"]
+      interval: 10s
+      timeout: 35s
+      retries: 5
+    networks:
+      - kitties-net
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    depends_on:
+      zookeeper:
+        condition: service_healthy
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_LISTENERS: INTERNAL://0.0.0.0:29092
+      KAFKA_ADVERTISED_LISTENERS: INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+    healthcheck:
+      test: ["CMD-SHELL", "cub kafka-ready -b localhost:29092 1 30"]
+      interval: 15s
+      timeout: 35s
+      retries: 5
+    networks:
+      - kitties-net
+
+  alloy:
+    image: grafana/alloy:latest
+    volumes:
+      - ./docker/alloy/config.alloy:/etc/alloy/config.alloy:ro
+    command: run /etc/alloy/config.alloy
+    environment:
+      GRAFANA_OTLP_ENDPOINT: ${GRAFANA_OTLP_ENDPOINT}
+      GRAFANA_INSTANCE_ID: ${GRAFANA_INSTANCE_ID}
+      GRAFANA_API_KEY: ${GRAFANA_API_KEY}
+    networks:
+      - kitties-net
+
+  # ─── Application services ─────────────────────────────────────────
+
+  user-service:
+    image: ciscoadiz/user-service:latest
+    environment:
+      QUARKUS_PROFILE: prod
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      KAFKA_HOST: kafka
+      KAFKA_PORT: 29092
+      GRPC_INTERNAL_SECRET: ${GRPC_INTERNAL_SECRET}
+      FRONTEND_URL: ${FRONTEND_URL}
+      OTEL_ENDPOINT: http://alloy:4317
+    secrets:
+      - source: jwt_public_key
+        target: /run/secrets/publicKey.pem
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      alloy:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8081/q/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - kitties-net
+
+  auth-service:
+    image: ciscoadiz/auth-service:latest
+    environment:
+      QUARKUS_PROFILE: prod
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      GRPC_INTERNAL_SECRET: ${GRPC_INTERNAL_SECRET}
+      USER_SERVICE_HOST: user-service
+      OTEL_ENDPOINT: http://alloy:4317
+    secrets:
+      - source: jwt_private_key
+        target: /run/secrets/privateKey.pem
+    depends_on:
+      postgres:
+        condition: service_healthy
+      user-service:
+        condition: service_started
+      alloy:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8082/q/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - kitties-net
+
+  storage-service:
+    image: ciscoadiz/storage-service:latest
+    environment:
+      QUARKUS_PROFILE: prod
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      MINIO_DEFAULT_BUCKETS: ${MINIO_DEFAULT_BUCKETS}
+      MINIO_URL: http://minio:9000
+      STORAGE_PUBLIC_URL: ${STORAGE_PUBLIC_URL}
+      OTEL_ENDPOINT: http://alloy:4317
+    depends_on:
+      minio:
+        condition: service_healthy
+      alloy:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8083/q/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - kitties-net
+
+  cat-service:
+    image: ciscoadiz/cat-service:latest
+    environment:
+      QUARKUS_PROFILE: prod
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      STORAGE_SERVICE_URL: http://storage-service:8083
+      OTEL_ENDPOINT: http://alloy:4317
+    secrets:
+      - source: jwt_public_key
+        target: /run/secrets/publicKey.pem
+    depends_on:
+      postgres:
+        condition: service_healthy
+      storage-service:
+        condition: service_started
+      alloy:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8084/q/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - kitties-net
+
+  notification-service:
+    image: ciscoadiz/notification-service:latest
+    environment:
+      QUARKUS_PROFILE: prod
+      KAFKA_HOST: kafka
+      KAFKA_PORT: 29092
+      FRONTEND_URL: ${FRONTEND_URL}
+      MAIL_HOST: ${MAIL_HOST}
+      MAIL_PORT: ${MAIL_PORT}
+      MAIL_FROM: ${MAIL_FROM}
+      MAIL_USERNAME: ${MAIL_USERNAME}
+      MAIL_PASSWORD: ${MAIL_PASSWORD}
+      MAIL_TLS: ${MAIL_TLS:-REQUIRED}
+      OTEL_ENDPOINT: http://alloy:4317
+    depends_on:
+      kafka:
+        condition: service_healthy
+      alloy:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8085/q/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - kitties-net
+
+  adoption-service:
+    image: ciscoadiz/adoption-service:latest
+    environment:
+      QUARKUS_PROFILE: prod
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      KAFKA_HOST: kafka
+      KAFKA_PORT: 29092
+      OTEL_ENDPOINT: http://alloy:4317
+    secrets:
+      - source: jwt_public_key
+        target: /run/secrets/publicKey.pem
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      alloy:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8086/q/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - kitties-net
+
+  form-analysis-service:
+    image: ciscoadiz/form-analysis-service:latest
+    environment:
+      QUARKUS_PROFILE: prod
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      KAFKA_HOST: kafka
+      KAFKA_PORT: 29092
+      OTEL_ENDPOINT: http://alloy:4317
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      alloy:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8087/q/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - kitties-net
+
+  organization-service:
+    image: ciscoadiz/organization-service:latest
+    environment:
+      QUARKUS_PROFILE: prod
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      OTEL_ENDPOINT: http://alloy:4317
+    secrets:
+      - source: jwt_public_key
+        target: /run/secrets/publicKey.pem
+    depends_on:
+      postgres:
+        condition: service_healthy
+      alloy:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8088/q/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - kitties-net
+
+  chat-service:
+    image: ciscoadiz/chat-service:latest
+    environment:
+      QUARKUS_PROFILE: prod
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD}
+      OTEL_ENDPOINT: http://alloy:4317
+    secrets:
+      - source: jwt_public_key
+        target: /run/secrets/publicKey.pem
+    depends_on:
+      postgres:
+        condition: service_healthy
+      alloy:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8089/q/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - kitties-net
+
+  gateway-service:
+    image: ciscoadiz/gateway-service:latest
+    environment:
+      QUARKUS_PROFILE: prod
+      CORS_ORIGIN: ${CORS_ORIGIN}
+      USER_SERVICE_URL: http://user-service:8081
+      AUTH_SERVICE_URL: http://auth-service:8082
+      STORAGE_SERVICE_URL: http://storage-service:8083
+      CAT_SERVICE_URL: http://cat-service:8084
+      ADOPTION_SERVICE_URL: http://adoption-service:8086
+      ORGANIZATION_SERVICE_URL: http://organization-service:8088
+      CHAT_SERVICE_URL: http://chat-service:8089
+      OTEL_ENDPOINT: http://alloy:4317
+    secrets:
+      - source: jwt_public_key
+        target: /run/secrets/publicKey.pem
+    depends_on:
+      user-service:
+        condition: service_started
+      auth-service:
+        condition: service_started
+      cat-service:
+        condition: service_started
+      adoption-service:
+        condition: service_started
+      organization-service:
+        condition: service_started
+      chat-service:
+        condition: service_started
+      alloy:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/q/health/live"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
+    networks:
+      - kitties-net
+
+  nginx:
+    image: nginx:1.27-alpine
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/conf.d/default.conf:ro
+      - certbot_certs:/etc/letsencrypt:ro
+      - certbot_www:/var/www/certbot:ro
+    depends_on:
+      gateway-service:
+        condition: service_started
+    restart: unless-stopped
+    networks:
+      - kitties-net
+
+  certbot:
+    image: certbot/certbot:latest
+    volumes:
+      - certbot_certs:/etc/letsencrypt
+      - certbot_www:/var/www/certbot
+    entrypoint: "/bin/sh -c 'trap exit TERM; while :; do certbot renew --quiet; sleep 12h & wait $${!}; done;'"

@@ -60,6 +60,25 @@ services:
       KAFKA_CLUSTERS_0_NAME: local
       KAFKA_CLUSTERS_0_BOOTSTRAPSERVERS: kafka:29092
       KAFKA_CLUSTERS_0_ZOOKEEPER: zookeeper:2181
+
+  alloy:
+    image: grafana/alloy:latest
+    volumes:
+      - ./docker/alloy/config.alloy:/etc/alloy/config.alloy:ro
+    command: run --server.http.listen-addr=0.0.0.0:12345 /etc/alloy/config.alloy
+    ports:
+      - "4317:4317"
+      - "4318:4318"
+      - "12345:12345"
+    environment:
+      GRAFANA_LOKI_URL: ${GRAFANA_LOKI_URL}
+      GRAFANA_LOKI_USER: ${GRAFANA_LOKI_USER}
+      GRAFANA_PROMETHEUS_URL: ${GRAFANA_PROMETHEUS_URL}
+      GRAFANA_PROMETHEUS_USER: ${GRAFANA_PROMETHEUS_USER}
+      GRAFANA_TEMPO_URL: ${GRAFANA_TEMPO_URL}
+      GRAFANA_TEMPO_USER: ${GRAFANA_TEMPO_USER}
+      GRAFANA_API_KEY: ${GRAFANA_API_KEY}
+
 volumes:
   postgres_data:
   minio_data:
