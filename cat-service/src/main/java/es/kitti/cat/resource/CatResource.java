@@ -14,6 +14,8 @@ import es.kitti.cat.dto.CatCreateRequest;
 import es.kitti.cat.dto.CatResponse;
 import es.kitti.cat.dto.CatSummaryResponse;
 import es.kitti.cat.dto.CatUpdateRequest;
+
+import java.util.List;
 import es.kitti.cat.service.CatService;
 import org.eclipse.microprofile.jwt.JsonWebToken;
 import org.jboss.resteasy.reactive.RestForm;
@@ -66,6 +68,14 @@ public class CatResource {
         Long callerId = Long.parseLong(jwt.getSubject());
         return catService.updateCat(id, request, callerId)
                 .onItem().transform(cat -> Response.ok(cat).build());
+    }
+
+    @GET
+    @Path("/mine")
+    @RolesAllowed("Organization")
+    public Uni<List<CatSummaryResponse>> findMine() {
+        Long callerId = Long.parseLong(jwt.getSubject());
+        return catService.findMine(callerId);
     }
 
     @DELETE

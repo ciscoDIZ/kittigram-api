@@ -5,6 +5,7 @@ import es.kitti.e2e.support.E2EConfig;
 import es.kitti.e2e.support.MailHogClient;
 import org.junit.jupiter.api.*;
 
+import java.util.Base64;
 import java.util.Map;
 
 import static io.restassured.RestAssured.given;
@@ -37,11 +38,13 @@ class CatE2E {
     private static String ownerOrgToken;
     private static String otherOrgToken;
     private static String plainUserToken;
+    private static Long ownerOrgUserId;
     private static Long catId;
     private static Long imageId;
+    private static Long catId2;
 
     @BeforeAll
-    static void setup() {
+    static void setup() throws Exception {
         E2EConfig.waitForStack();
 
         register(OWNER_ORG_EMAIL, "Owner", "Org", "Organization");
@@ -55,6 +58,8 @@ class CatE2E {
         ownerOrgToken = login(OWNER_ORG_EMAIL, PASSWORD);
         otherOrgToken = login(OTHER_ORG_EMAIL, PASSWORD);
         plainUserToken = login(PLAIN_USER_EMAIL, PASSWORD);
+
+        ownerOrgUserId = extractSubFromJwt(ownerOrgToken);
 
         // Each org-role user must own an Organization entity so that intake/by-region
         // queries don't drift; the cat-service itself only checks the JWT sub, but
@@ -280,7 +285,7 @@ class CatE2E {
             .statusCode(204);
     }
 
-    // --- DELETE /cats/{id} ---
+    // --- DELETE /cats/{id} — logical delete ---
 
     @Test @Order(17)
     void deleteCat_otherOrg_returns403() {
@@ -303,12 +308,104 @@ class CatE2E {
     }
 
     @Test @Order(19)
-    void getCat_afterDelete_returns404() {
+    void getCat_afterDelete_publicReturns404() {
         given()
         .when()
             .get("/api/cats/" + catId)
         .then()
             .statusCode(404);
+    }
+
+    @Test @Order(20)
+    void searchCats_afterDelete_excludesDeletedCat() {
+        given()
+            .queryParam("city", "Madrid")
+        .when()
+            .get("/api/cats")
+        .then()
+            .statusCode(200)
+            .body("id", not(hasItem(catId.intValue())));
+    }
+
+    @Test @Order(21)
+    void findMine_afterDelete_excludesDeletedCat() {
+        given()
+            .header("Authorization", "Bearer " + ownerOrgToken)
+        .when()
+            .get("/api/cats/mine")
+        .then()
+            .statusCode(200)
+            .body("id", not(hasItem(catId.intValue())));
+    }
+
+    // --- DELETE /cats/{id} blocked when active adoption exists ---
+
+    @Test @Order(22)
+    void createCat2_forActiveAdoptionTest() {
+        var response = given()
+            .contentType(ContentType.JSON)
+            .header("Authorization", "Bearer " + ownerOrgToken)
+            .body(Map.of(
+                "name", "Ronron",
+                "age", 3,
+                "sex", "Male",
+                "city", "Madrid",
+                "country", "Spain",
+                "neutered", true
+            ))
+        .when()
+            .post("/api/cats")
+        .then()
+            .statusCode(201)
+            .extract().response();
+
+        catId2 = response.jsonPath().getLong("id");
+    }
+
+    @Test @Order(23)
+    void createAdoptionRequest_forCat2() {
+        given()
+            .contentType(ContentType.JSON)
+            .header("Authorization", "Bearer " + plainUserToken)
+            .body(Map.of("catId", catId2, "organizationId", ownerOrgUserId))
+        .when()
+            .post("/api/adoptions")
+        .then()
+            .statusCode(201)
+            .body("catId", equalTo(catId2.intValue()))
+            .body("status", equalTo("Pending"));
+    }
+
+    @Test @Order(24)
+    void deleteCat2_withActiveAdoption_returns409() {
+        given()
+            .header("Authorization", "Bearer " + ownerOrgToken)
+        .when()
+            .delete("/api/cats/" + catId2)
+        .then()
+            .statusCode(409);
+    }
+
+    @Test @Order(25)
+    void getCat2_afterFailedDelete_stillPubliclyVisible() {
+        given()
+        .when()
+            .get("/api/cats/" + catId2)
+        .then()
+            .statusCode(200)
+            .body("status", equalTo("Available"));
+    }
+
+    @Test @Order(26)
+    void createAdoption_forDeletedCat_returns409() {
+        given()
+            .contentType(ContentType.JSON)
+            .header("Authorization", "Bearer " + plainUserToken)
+            .body(Map.of("catId", catId, "organizationId", ownerOrgUserId))
+        .when()
+            .post("/api/adoptions")
+        .then()
+            .statusCode(409);
     }
 
     // --- helpers ---
@@ -340,5 +437,13 @@ class CatE2E {
             .header("Authorization", "Bearer " + token)
             .body(Map.of("name", name, "city", city, "region", region, "country", "Spain"))
             .post("/api/organizations").then().statusCode(201);
+    }
+
+    private static Long extractSubFromJwt(String token) throws Exception {
+        String[] parts = token.split("\\.");
+        byte[] payload = Base64.getUrlDecoder().decode(parts[1]);
+        String json = new String(payload);
+        String sub = json.replaceAll(".*\"sub\":\"?(\\d+)\"?.*", "$1");
+        return Long.parseLong(sub);
     }
 }

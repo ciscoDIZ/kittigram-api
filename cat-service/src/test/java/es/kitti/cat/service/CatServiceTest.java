@@ -3,11 +3,12 @@ package es.kitti.cat.service;
 import io.smallrye.mutiny.Multi;
 import io.smallrye.mutiny.Uni;
 import jakarta.ws.rs.ForbiddenException;
+import es.kitti.cat.client.AdoptionClient;
 import es.kitti.cat.client.StorageClient;
 import es.kitti.cat.dto.*;
 import es.kitti.cat.entity.Cat;
-import es.kitti.cat.entity.CatImage;
 import es.kitti.cat.entity.CatStatus;
+import es.kitti.cat.exception.CatHasActiveAdoptionsException;
 import es.kitti.cat.exception.CatNotFoundException;
 import es.kitti.cat.mapper.CatMapper;
 import es.kitti.cat.repository.CatImageRepository;
@@ -42,6 +43,9 @@ class CatServiceTest {
     @Mock
     StorageClient storageClient;
 
+    @Mock
+    AdoptionClient adoptionClient;
+
     @InjectMocks
     CatService catService;
 
@@ -62,7 +66,7 @@ class CatServiceTest {
         testCatResponse = new CatResponse(
                 1L, "Peluso", 2, "Male", null, true,
                 "Available", "La Orotava", "Tenerife", "España",
-                null, null, 10L, List.of(), // organizationId=10
+                null, null, 10L, List.of(),
                 LocalDateTime.now(), LocalDateTime.now()
         );
 
@@ -123,51 +127,30 @@ class CatServiceTest {
     }
 
     @Test
-    void deleteCat_ownerDeletes_success() {
-        CatImage image = new CatImage();
-        image.key = "some-key";
-
+    void findById_deletedCat_throwsCatNotFoundException() {
+        testCat.status = CatStatus.Deleted;
         when(catRepository.findById(1L))
                 .thenReturn(Uni.createFrom().item(testCat));
-        when(catImageRepository.findByCatId(1L))
-                .thenReturn(Multi.createFrom().items(image));
-        when(storageClient.delete("some-key"))
-                .thenReturn(Uni.createFrom().voidItem());
-        when(catImageRepository.deleteByCatId(1L))
-                .thenReturn(Uni.createFrom().voidItem());
-        when(catRepository.delete(testCat))
-                .thenReturn(Uni.createFrom().voidItem());
-
-        assertDoesNotThrow(() ->
-                catService.deleteCat(1L, 10L)
-                        .await().indefinitely()
-        );
-
-        verify(catRepository).delete(testCat);
-    }
-
-    @Test
-    void deleteCat_notOwner_throwsForbiddenException() {
-        when(catRepository.findById(1L))
-                .thenReturn(Uni.createFrom().item(testCat));
-
-        assertThrows(ForbiddenException.class, () ->
-                catService.deleteCat(1L, 99L)
-                        .await().indefinitely()
-        );
-
-        verify(catRepository, never()).delete(any(Cat.class));
-    }
-
-    @Test
-    void deleteCat_catNotFound_throwsCatNotFoundException() {
-        when(catRepository.findById(999L))
-                .thenReturn(Uni.createFrom().nullItem());
 
         assertThrows(CatNotFoundException.class, () ->
-                catService.deleteCat(999L, 10L)
-                        .await().indefinitely()
+                catService.findById(1L).await().indefinitely()
         );
+    }
+
+    // deleteCat uses Panache.withSession/withTransaction (static calls that require Vert.x context)
+    // — those scenarios are fully covered in CatResourceTest (integration) and CatE2E
+
+    @Test
+    void findMine_excludesDeletedCats() {
+        when(catRepository.findByOrganizationId(10L))
+                .thenReturn(Uni.createFrom().item(List.of(testCat)));
+        when(catMapper.toSummaryResponse(testCat))
+                .thenReturn(testCatSummaryResponse);
+
+        var result = catService.findMine(10L).await().indefinitely();
+
+        assertEquals(1, result.size());
+        verify(catRepository).findByOrganizationId(10L);
     }
 
     @Test
