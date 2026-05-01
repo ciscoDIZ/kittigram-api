@@ -1,20 +1,38 @@
 package es.kitti.adoption.resource;
 
+import io.quarkus.test.InjectMock;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
 import io.restassured.http.ContentType;
 import io.quarkus.test.security.TestSecurity;
 import io.quarkus.test.security.jwt.Claim;
 import io.quarkus.test.security.jwt.JwtSecurity;
+import io.smallrye.mutiny.Uni;
+import jakarta.ws.rs.core.Response;
+import es.kitti.adoption.client.CatClient;
 import es.kitti.adoption.test.KafkaTestResource;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
+import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.Mockito.when;
 
 @QuarkusTest
 @QuarkusTestResource(KafkaTestResource.class)
 class AdoptionInternalResourceTest {
+
+    @InjectMock
+    @RestClient
+    CatClient catClient;
+
+    @BeforeEach
+    void mockCatClient() {
+        when(catClient.findById(anyLong()))
+                .thenReturn(Uni.createFrom().item(Response.ok().build()));
+    }
 
     private static final String INTERNAL_TOKEN = "test-internal-secret";
 

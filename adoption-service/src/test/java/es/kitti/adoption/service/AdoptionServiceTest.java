@@ -2,6 +2,8 @@ package es.kitti.adoption.service;
 
 import io.smallrye.mutiny.Uni;
 import jakarta.ws.rs.ForbiddenException;
+import jakarta.ws.rs.core.Response;
+import es.kitti.adoption.client.CatClient;
 import es.kitti.adoption.dto.*;
 import es.kitti.adoption.entity.*;
 import es.kitti.adoption.event.AdoptionFormSubmittedEvent;
@@ -46,6 +48,9 @@ class AdoptionServiceTest {
     AdoptionMapper adoptionMapper;
 
     @Mock
+    CatClient catClient;
+
+    @Mock
     Emitter<AdoptionFormSubmittedEvent> adoptionFormSubmittedEmitter;
 
     @InjectMocks
@@ -71,33 +76,15 @@ class AdoptionServiceTest {
         );
     }
 
-    @Test
-    void createAdoptionRequest_catAvailable_success() {
-        var request = new AdoptionRequestCreateRequest(10L, 200L);
-
-        when(adoptionRequestRepository.existsActiveByCatId(10L))
-                .thenReturn(Uni.createFrom().item(false));
-        when(adoptionMapper.toEntity(request, 100L, "adopter@kitti.es"))
-                .thenReturn(testAdoptionRequest);
-        when(adoptionRequestRepository.persist(any(AdoptionRequest.class)))
-                .thenReturn(Uni.createFrom().item(testAdoptionRequest));
-        when(adoptionMapper.toResponse(testAdoptionRequest))
-                .thenReturn(testAdoptionRequestResponse);
-
-        var result = adoptionService.createAdoptionRequest(request, 100L, "adopter@kitti.es")
-                .await().indefinitely();
-
-        assertNotNull(result);
-        assertEquals(AdoptionStatus.Pending, result.status());
-        assertEquals(10L, result.catId());
-    }
+    // createAdoptionRequest success and active-adoptions cases use Panache.withTransaction()
+    // — those scenarios are covered in AdoptionResourceTest (integration)
 
     @Test
-    void createAdoptionRequest_catNotAvailable_throwsCatNotAvailableException() {
+    void createAdoptionRequest_catDeleted_throwsCatNotAvailableException() {
         var request = new AdoptionRequestCreateRequest(10L, 200L);
 
-        when(adoptionRequestRepository.existsActiveByCatId(10L))
-                .thenReturn(Uni.createFrom().item(true));
+        when(catClient.findById(10L))
+                .thenReturn(Uni.createFrom().item(Response.status(404).build()));
 
         assertThrows(CatNotAvailableException.class, () ->
                 adoptionService.createAdoptionRequest(request, 100L, "adopter@kitti.es")
