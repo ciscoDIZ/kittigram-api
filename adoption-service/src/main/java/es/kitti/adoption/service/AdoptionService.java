@@ -7,6 +7,7 @@ import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.ForbiddenException;
+import es.kitti.adoption.client.CatClient;
 import es.kitti.adoption.dto.*;
 import es.kitti.adoption.entity.*;
 import es.kitti.adoption.event.AdoptionFormAnalysedEvent;
@@ -17,6 +18,7 @@ import es.kitti.adoption.repository.*;
 import org.eclipse.microprofile.reactive.messaging.Channel;
 import org.eclipse.microprofile.reactive.messaging.Emitter;
 import org.eclipse.microprofile.reactive.messaging.Incoming;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import java.util.List;
 
@@ -41,21 +43,34 @@ public class AdoptionService {
     @Inject
     AdoptionMapper adoptionMapper;
 
+    @RestClient
+    CatClient catClient;
+
     @Inject
     @Channel("adoption-form-submitted")
     Emitter<AdoptionFormSubmittedEvent> adoptionFormSubmittedEmitter;
-    @WithTransaction
+
     public Uni<AdoptionRequestResponse> createAdoptionRequest(
             AdoptionRequestCreateRequest request, Long adopterId, String adopterEmail) {
 
-        return adoptionRequestRepository.existsActiveByCatId(request.catId())
-                .onItem().transformToUni(exists -> {
-                    if (exists) {
-                        return Uni.createFrom()
-                                .failure(new CatNotAvailableException(request.catId()));
+        return catClient.findById(request.catId())
+                .onFailure(jakarta.ws.rs.WebApplicationException.class)
+                .recoverWithItem(e -> ((jakarta.ws.rs.WebApplicationException) e).getResponse())
+                .onItem().transformToUni(response -> {
+                    if (response.getStatus() != 200) {
+                        return Uni.createFrom().failure(new CatNotAvailableException(request.catId()));
                     }
-                    AdoptionRequest entity = adoptionMapper.toEntity(request, adopterId, adopterEmail);
-                    return adoptionRequestRepository.persist(entity);
+                    return Panache.withTransaction(() ->
+                            adoptionRequestRepository.existsActiveByCatId(request.catId())
+                                    .onItem().transformToUni(exists -> {
+                                        if (exists) {
+                                            return Uni.createFrom()
+                                                    .failure(new CatNotAvailableException(request.catId()));
+                                        }
+                                        AdoptionRequest entity = adoptionMapper.toEntity(request, adopterId, adopterEmail);
+                                        return adoptionRequestRepository.persist(entity);
+                                    })
+                    );
                 })
                 .onItem().transform(adoptionMapper::toResponse);
     }
