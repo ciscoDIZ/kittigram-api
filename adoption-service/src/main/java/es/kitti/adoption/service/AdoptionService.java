@@ -8,6 +8,7 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.ForbiddenException;
 import es.kitti.adoption.client.CatClient;
 import es.kitti.adoption.dto.*;
+import java.util.stream.Collectors;
 import es.kitti.adoption.entity.*;
 import es.kitti.adoption.event.AdoptionFormAnalysedEvent;
 import es.kitti.adoption.event.AdoptionFormSubmittedEvent;
@@ -94,6 +95,33 @@ public class AdoptionService {
     @WithSession
     public Uni<List<AdoptionRequestResponse>> findByOrganizationId(Long organizationId) {
         return adoptionRequestRepository.findByOrganizationId(organizationId)
+                .onItem().transform(list -> list.stream()
+                        .map(adoptionMapper::toResponse)
+                        .toList());
+    }
+
+    @WithSession
+    public Uni<AdoptionPipelineStatsResponse> getOrgPipeline(Long organizationId) {
+        return adoptionRequestRepository.findByOrganizationId(organizationId)
+                .onItem().transform(list -> {
+                    var counts = list.stream()
+                            .collect(Collectors.groupingBy(a -> a.status, Collectors.counting()));
+                    return new AdoptionPipelineStatsResponse(
+                            counts.getOrDefault(AdoptionStatus.Pending, 0L),
+                            counts.getOrDefault(AdoptionStatus.Reviewing, 0L),
+                            counts.getOrDefault(AdoptionStatus.Accepted, 0L),
+                            counts.getOrDefault(AdoptionStatus.FormCompleted, 0L),
+                            counts.getOrDefault(AdoptionStatus.PaymentPending, 0L),
+                            counts.getOrDefault(AdoptionStatus.PaymentFailed, 0L),
+                            counts.getOrDefault(AdoptionStatus.Completed, 0L),
+                            counts.getOrDefault(AdoptionStatus.Rejected, 0L)
+                    );
+                });
+    }
+
+    @WithSession
+    public Uni<List<AdoptionRequestResponse>> findByCatIdForOrg(Long catId, Long organizationId) {
+        return adoptionRequestRepository.findByCatIdAndOrganizationId(catId, organizationId)
                 .onItem().transform(list -> list.stream()
                         .map(adoptionMapper::toResponse)
                         .toList());

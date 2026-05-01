@@ -40,4 +40,9 @@ public class CatRepository implements PanacheRepository<Cat> {
     public Uni<List<Cat>> findByOrganizationId(Long organizationId) {
         return find("organizationId = ?1 and status != ?2", organizationId, CatStatus.Deleted).list();
     }
+
+    @WithSession
+    public Uni<List<Cat>> findAllByOrganizationId(Long organizationId) {
+        return find("organizationId", organizationId).list();
+    }
 }

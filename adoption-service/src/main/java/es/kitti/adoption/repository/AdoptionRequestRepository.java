@@ -25,6 +25,10 @@ public class AdoptionRequestRepository implements PanacheRepository<AdoptionRequ
         return list("catId", catId);
     }
 
+    public Uni<List<AdoptionRequest>> findByCatIdAndOrganizationId(Long catId, Long organizationId) {
+        return list("catId = ?1 and organizationId = ?2 order by createdAt desc", catId, organizationId);
+    }
+
     @WithSession
     public Uni<Boolean> existsActiveByCatId(Long catId) {
         return count("catId = ?1 and status not in ?2", catId,

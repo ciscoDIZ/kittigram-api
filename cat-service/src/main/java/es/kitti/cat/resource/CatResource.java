@@ -11,6 +11,7 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import es.kitti.cat.dto.CatCreateRequest;
+import es.kitti.cat.dto.CatInventoryStatsResponse;
 import es.kitti.cat.dto.CatResponse;
 import es.kitti.cat.dto.CatSummaryResponse;
 import es.kitti.cat.dto.CatUpdateRequest;
@@ -76,6 +77,14 @@ public class CatResource {
     public Uni<List<CatSummaryResponse>> findMine() {
         Long callerId = Long.parseLong(jwt.getSubject());
         return catService.findMine(callerId);
+    }
+
+    @GET
+    @Path("/mine/stats")
+    @RolesAllowed("Organization")
+    public Uni<CatInventoryStatsResponse> getInventoryStats() {
+        Long callerId = Long.parseLong(jwt.getSubject());
+        return catService.getInventoryStats(callerId);
     }
 
     @DELETE

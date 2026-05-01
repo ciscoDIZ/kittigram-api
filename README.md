@@ -103,6 +103,7 @@ Cat profiles for adoption. Images are proxied through the gateway; bucket URLs a
 - `GET /cats?city=X&name=Y` — Search (public; excludes `Deleted` cats)
 - `GET /cats/{id}` — Detail with images (public; returns **404** for `Deleted` cats)
 - `GET /cats/mine` — Org's own cats (JWT; excludes `Deleted` cats)
+- `GET /cats/mine/stats` — Inventory stats `{available, unavailable, deleted, total}` (JWT; includes `Deleted`)
 - `POST /cats` — Create profile (JWT)
 - `PUT /cats/{id}` — Update (JWT, owner only)
 - `DELETE /cats/{id}` — Logical delete (`status → Deleted`, JWT, owner only); returns **409** if any active adoption request exists for this cat
@@ -148,6 +149,8 @@ End-to-end adoption workflow. Adopters submit requests and complete screening fo
 | `GET` | `/adoptions/{id}` | Any (JWT) | Caller must be adopter **or** organization of that request |
 | `GET` | `/adoptions/my` | `User` | My requests as adopter |
 | `GET` | `/adoptions/organization` | `Organization` | Requests for my organization |
+| `GET` | `/adoptions/organization/pipeline` | `Organization` | Adoption counts grouped by status `{pending, reviewing, accepted, …}` |
+| `GET` | `/adoptions/organization/cats/{catId}` | `Organization` | Case history for a specific cat (org's cats only) |
 | `PATCH` | `/adoptions/{id}/status` | `Organization` | Update status; org owner only; returns **409** if cat is deleted and new status is non-terminal |
 | `POST` | `/adoptions/{id}/form` | `User` | Submit screening form (`Pending → Reviewing`); returns **409** if cat is deleted |
 | `POST` | `/adoptions/{id}/interview` | `Organization` | Schedule interview; returns **409** if cat is deleted |
@@ -168,6 +171,7 @@ All mutation endpoints verify the cat is still active (not `Deleted`) via `cat-s
 | `POST`  | `/intake-requests`                    | `User`         | User asks an organization to take in a cat (surrender)               |
 | `GET`   | `/intake-requests/mine`               | `User`         | My pending/approved/rejected intakes                                 |
 | `GET`   | `/intake-requests/organization`       | `Organization` | Intakes addressed to my organization                                 |
+| `GET`   | `/intake-requests/organization/stats` | `Organization` | Intake counts by status `{pending, approved, rejected}`              |
 | `PATCH` | `/intake-requests/{id}/approve`       | `Organization` | Approves the surrender (only Pending → Approved)                     |
 | `PATCH` | `/intake-requests/{id}/reject`        | `Organization` | Rejects with reason; response includes alternative organizations in the same region (looked up via `organization-service` internal endpoint, tolerates lookup failures) |
 
@@ -603,7 +607,7 @@ Copy `.env.example` to `.env` and fill in all values. Variables marked **require
 
 Shelters distrust platforms that automate them out of control. The value proposition is giving them better tools to manage their own work, not replacing it. This is what justifies a subscription.
 
-- [ ] Shelter management dashboard — adoption pipeline view, cat inventory, case history per animal.
+- [x] Shelter management dashboard — adoption pipeline view (`GET /adoptions/organization/pipeline`), cat inventory stats (`GET /cats/mine/stats`), case history per animal (`GET /adoptions/organization/cats/{catId}`), intake pipeline stats (`GET /intake-requests/organization/stats`).
 - [ ] Multi-user per shelter — shelter admin can invite volunteers with limited roles.
 - [ ] Shelter analytics — adoption rates, average time to adopt, rejection reasons.
 - [ ] Post-adoption follow-up — shelter requests updates (photos, health status) from adopters.

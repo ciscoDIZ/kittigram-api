@@ -111,6 +111,17 @@ public class CatService {
                         .toList());
     }
 
+    @WithSession
+    public Uni<CatInventoryStatsResponse> getInventoryStats(Long organizationId) {
+        return catRepository.findAllByOrganizationId(organizationId)
+                .onItem().transform(cats -> {
+                    long available = cats.stream().filter(c -> c.status == CatStatus.Available).count();
+                    long unavailable = cats.stream().filter(c -> c.status == CatStatus.Unavailable).count();
+                    long deleted = cats.stream().filter(c -> c.status == CatStatus.Deleted).count();
+                    return new CatInventoryStatsResponse(available, unavailable, deleted, available + unavailable + deleted);
+                });
+    }
+
     @WithTransaction
     public Uni<CatResponse> uploadImage(Long catId, FileUpload file, Long organizationId) {
         return catRepository.findById(catId)

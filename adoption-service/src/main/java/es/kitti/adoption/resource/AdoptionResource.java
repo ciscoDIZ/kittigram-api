@@ -58,6 +58,22 @@ public class AdoptionResource {
         return adoptionService.findByOrganizationId(organizationId);
     }
 
+    @GET
+    @Path("/organization/pipeline")
+    @RolesAllowed("Organization")
+    public Uni<AdoptionPipelineStatsResponse> getOrgPipeline() {
+        Long organizationId = Long.parseLong(jwt.getSubject());
+        return adoptionService.getOrgPipeline(organizationId);
+    }
+
+    @GET
+    @Path("/organization/cats/{catId}")
+    @RolesAllowed("Organization")
+    public Uni<List<AdoptionRequestResponse>> findByCatId(@PathParam("catId") Long catId) {
+        Long organizationId = Long.parseLong(jwt.getSubject());
+        return adoptionService.findByCatIdForOrg(catId, organizationId);
+    }
+
     @PATCH
     @Path("/{id}/status")
     @RolesAllowed("Organization")

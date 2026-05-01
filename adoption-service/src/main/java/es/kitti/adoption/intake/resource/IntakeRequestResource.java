@@ -9,6 +9,7 @@ import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
 import es.kitti.adoption.intake.dto.IntakeDecisionRequest;
+import es.kitti.adoption.intake.dto.IntakePipelineStatsResponse;
 import es.kitti.adoption.intake.dto.IntakeRejectionResponse;
 import es.kitti.adoption.intake.dto.IntakeRequestCreateRequest;
 import es.kitti.adoption.intake.dto.IntakeRequestResponse;
@@ -51,6 +52,14 @@ public class IntakeRequestResource {
     public Uni<List<IntakeRequestResponse>> findByOrganization() {
         Long callerOrgId = Long.parseLong(jwt.getSubject());
         return service.findByOrganization(callerOrgId);
+    }
+
+    @GET
+    @Path("/organization/stats")
+    @RolesAllowed("Organization")
+    public Uni<IntakePipelineStatsResponse> getOrgStats() {
+        Long callerOrgId = Long.parseLong(jwt.getSubject());
+        return service.getOrgStats(callerOrgId);
     }
 
     @PATCH

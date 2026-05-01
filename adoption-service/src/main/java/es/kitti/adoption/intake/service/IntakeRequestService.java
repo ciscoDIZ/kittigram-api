@@ -10,6 +10,7 @@ import jakarta.ws.rs.ForbiddenException;
 import es.kitti.adoption.intake.client.OrganizationClient;
 import es.kitti.adoption.intake.client.OrganizationPublicMinimal;
 import es.kitti.adoption.intake.dto.IntakeDecisionRequest;
+import es.kitti.adoption.intake.dto.IntakePipelineStatsResponse;
 import es.kitti.adoption.intake.dto.IntakeRejectionResponse;
 import es.kitti.adoption.intake.dto.IntakeRequestCreateRequest;
 import es.kitti.adoption.intake.dto.IntakeRequestResponse;
@@ -58,6 +59,17 @@ public class IntakeRequestService {
     public Uni<List<IntakeRequestResponse>> findByOrganization(Long organizationId) {
         return repository.findByTargetOrganizationId(organizationId)
                 .onItem().transform(list -> list.stream().map(mapper::toResponse).toList());
+    }
+
+    @WithSession
+    public Uni<IntakePipelineStatsResponse> getOrgStats(Long organizationId) {
+        return repository.findByTargetOrganizationId(organizationId)
+                .onItem().transform(list -> {
+                    long pending = list.stream().filter(i -> i.status == IntakeStatus.Pending).count();
+                    long approved = list.stream().filter(i -> i.status == IntakeStatus.Approved).count();
+                    long rejected = list.stream().filter(i -> i.status == IntakeStatus.Rejected).count();
+                    return new IntakePipelineStatsResponse(pending, approved, rejected);
+                });
     }
 
     @WithTransaction
