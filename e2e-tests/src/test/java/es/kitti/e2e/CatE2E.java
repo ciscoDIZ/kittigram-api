@@ -396,6 +396,18 @@ class CatE2E {
             .body("status", equalTo("Available"));
     }
 
+    @Test @Order(26)
+    void createAdoption_forDeletedCat_returns409() {
+        given()
+            .contentType(ContentType.JSON)
+            .header("Authorization", "Bearer " + plainUserToken)
+            .body(Map.of("catId", catId, "organizationId", ownerOrgUserId))
+        .when()
+            .post("/api/adoptions")
+        .then()
+            .statusCode(409);
+    }
+
     // --- helpers ---
 
     private static void register(String email, String name, String surname, String role) {
