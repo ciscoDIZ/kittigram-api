@@ -17,4 +17,8 @@ public class RefreshTokenRepository implements PanacheRepository<RefreshToken> {
     public Uni<Integer> revokeAllByUserId(Long userId) {
         return update("revoked = true where userId = ?1 and revoked = false", userId);
     }
+
+    public Uni<Long> deleteAllByUserId(Long userId) {
+        return delete("userId", userId);
+    }
 }
