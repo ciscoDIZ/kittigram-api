@@ -30,6 +30,12 @@ public class User extends PanacheEntity {
     public String activationToken;
     @Column(name = "activation_token_expires_at")
     public LocalDateTime activationTokenExpiresAt;
+    @Column(name = "legal_hold_until")
+    public LocalDateTime legalHoldUntil;
+    @Column(name = "deleted_at")
+    public LocalDateTime deletedAt;
+    @Column(name = "scheduled_purge_at")
+    public LocalDateTime scheduledPurgeAt;
     @Column(name = "created_at", nullable = false, updatable = false)
     public LocalDateTime createdAt;
     @Column(name = "updated_at", nullable = false)

@@ -34,6 +34,12 @@ public class GlobalExceptionMapper implements ExceptionMapper<Throwable> {
                             exception.getMessage()
                     ))
                     .build();
+            case LegalHoldException legalHoldException -> Response.status(Response.Status.CONFLICT)
+                    .entity(new ErrorResponse(
+                            Response.Status.CONFLICT.getStatusCode(),
+                            exception.getMessage()
+                    ))
+                    .build();
             case IllegalArgumentException illegalArgumentException -> Response.status(Response.Status.CONFLICT)
                     .entity(new ErrorResponse(
                             Response.Status.CONFLICT.getStatusCode(),
