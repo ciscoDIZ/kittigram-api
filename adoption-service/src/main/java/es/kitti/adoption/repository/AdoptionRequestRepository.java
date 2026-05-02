@@ -35,4 +35,9 @@ public class AdoptionRequestRepository implements PanacheRepository<AdoptionRequ
                 List.of(AdoptionStatus.Rejected, AdoptionStatus.Completed))
                 .onItem().transform(count -> count > 0);
     }
+
+    public Uni<Integer> anonymizeAdopter(Long adopterId) {
+        return update("adopterEmail = ?1 where adopterId = ?2",
+                adopterId + "@erased.kitties", adopterId);
+    }
 }

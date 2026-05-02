@@ -23,4 +23,8 @@ public class IntakeRequestRepository implements PanacheRepository<IntakeRequest>
         return list("targetOrganizationId = ?1 and status = ?2 order by createdAt desc",
                 organizationId, status);
     }
+
+    public Uni<Integer> anonymizeByUserId(Long userId) {
+        return update("userId = 0L where userId = ?1", userId);
+    }
 }

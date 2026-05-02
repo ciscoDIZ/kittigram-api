@@ -11,4 +11,9 @@ public class AdoptionRequestFormRepository implements PanacheRepository<Adoption
     public Uni<AdoptionRequestForm> findByAdoptionRequestId(Long adoptionRequestId) {
         return find("adoptionRequestId", adoptionRequestId).firstResult();
     }
+
+    public Uni<Integer> clearAllergiesForRequestIds(java.util.List<Long> requestIds) {
+        if (requestIds.isEmpty()) return io.smallrye.mutiny.Uni.createFrom().item(0);
+        return update("allergiesDetail = null where adoptionRequestId in ?1", requestIds);
+    }
 }
