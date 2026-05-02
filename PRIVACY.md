@@ -123,12 +123,28 @@ Incumplimientos que la AEPD considera graves y que pueden generar sanción antes
 - *Anonimización directa*: sobreescribir campos PII con valores nulos o placeholders irreversibles en el momento del borrado.
 - *Crypto-shredding*: cifrar todos los campos PII por usuario con una clave individual; el borrado consiste en destruir esa clave. Más complejo (requiere gestión de claves por usuario) pero resuelve C-3 y C-4 simultáneamente sin complicar retenciones.
 
-**⚠ Apunte de diseño — legal hold (Art. 17.3.e RGPD):**
+**⚠ Apunte de diseño — legal hold y período de gracia (Art. 17.3.e RGPD):**
 El derecho al olvido no es absoluto. Si los datos de un usuario son necesarios como prueba en un procedimiento penal o civil (abuso animal, fraude, etc.), el art. 17.3.e permite denegar la solicitud de borrado mientras dure el procedimiento. Se debe implementar un mecanismo de **legal hold**:
 - Campo `legal_hold_until: TIMESTAMPTZ` (o flag booleano) en `users.users`.
 - Solo activable por un administrador de la plataforma (o por integración con requerimiento judicial).
 - Mientras esté activo, cualquier solicitud de borrado devuelve 409 con texto legal explícito.
 - El hold expira automáticamente o se levanta manualmente al concluir el procedimiento.
+
+**⚠ Apunte de diseño — requerimiento judicial posterior al borrado:**
+Si el requerimiento llega después de que el usuario ya solicitó el borrado, la anonimización inmediata eliminaría la evidencia sin posibilidad de recuperación. Solución: **período de gracia de 30 días** entre la petición y la ejecución real:
+
+```
+usuario solicita borrado
+        ↓
+cuenta desactivada inmediatamente (no puede autenticarse)
+datos marcados: deleted_at = now(), scheduled_purge = now() + 30 días
+        ↓
+durante 30 días: un legal hold puede bloquear la purga
+        ↓
+día 30 sin hold activo → job nocturno ejecuta la anonimización definitiva
+```
+
+Si el requerimiento llega tras ejecutarse la purga, la plataforma queda protegida porque actuó de buena fe cumpliendo el art. 17 sin notificación previa de retención. Las autoridades disponen de 30 días de margen razonable desde la solicitud del usuario. Este patrón es el estándar de facto en grandes plataformas (Google, Meta, etc.).
 
 ### C-4 — Sin política de retención de datos (Art. 5.1.e RGPD)
 
