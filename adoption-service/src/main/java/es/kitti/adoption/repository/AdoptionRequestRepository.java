@@ -8,6 +8,7 @@ import jakarta.enterprise.context.ApplicationScoped;
 import es.kitti.adoption.entity.AdoptionRequest;
 import es.kitti.adoption.entity.AdoptionStatus;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @ApplicationScoped
@@ -39,5 +40,18 @@ public class AdoptionRequestRepository implements PanacheRepository<AdoptionRequ
     public Uni<Integer> anonymizeAdopter(Long adopterId) {
         return update("adopterEmail = ?1 where adopterId = ?2",
                 adopterId + "@erased.kitties", adopterId);
+    }
+
+    public Uni<List<AdoptionRequest>> findRejectedBefore(LocalDateTime cutoff) {
+        return list("status = ?1 and updatedAt < ?2", AdoptionStatus.Rejected, cutoff);
+    }
+
+    public Uni<List<AdoptionRequest>> findCompletedBefore(LocalDateTime cutoff) {
+        return list("status = ?1 and updatedAt < ?2", AdoptionStatus.Completed, cutoff);
+    }
+
+    public Uni<Long> deleteByIds(List<Long> ids) {
+        if (ids.isEmpty()) return Uni.createFrom().item(0L);
+        return delete("id in ?1", ids);
     }
 }

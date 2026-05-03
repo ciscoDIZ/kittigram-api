@@ -20,4 +20,9 @@ public class AdoptionFormRepository implements PanacheRepository<AdoptionForm> {
                 "additionalNotes = null where adoptionRequestId in ?2",
                 encryptedPlaceholder, requestIds);
     }
+
+    public Uni<Long> deleteByRequestIds(java.util.List<Long> requestIds) {
+        if (requestIds.isEmpty()) return io.smallrye.mutiny.Uni.createFrom().item(0L);
+        return delete("adoptionRequestId in ?1", requestIds);
+    }
 }

@@ -6,12 +6,14 @@ import es.kitti.adoption.repository.AdoptionRequestFormRepository;
 import es.kitti.adoption.repository.AdoptionRequestRepository;
 import es.kitti.adoption.security.IdNumberEncryptionService;
 import es.kitti.adoption.security.InternalOnly;
+import es.kitti.adoption.service.RetentionPurgeService;
 import io.quarkus.hibernate.reactive.panache.Panache;
 import io.smallrye.mutiny.Uni;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
 import jakarta.ws.rs.GET;
+import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
@@ -41,6 +43,9 @@ public class AdoptionInternalResource {
     @Inject
     IdNumberEncryptionService encryptionService;
 
+    @Inject
+    RetentionPurgeService retentionPurgeService;
+
     @GET
     @Path("/cats/{catId}/active")
     public Uni<Boolean> hasActiveRequestsForCat(@PathParam("catId") Long catId) {
@@ -62,5 +67,13 @@ public class AdoptionInternalResource {
                         })
         )
         .onItem().transform(v -> Response.noContent().build());
+    }
+
+    @POST
+    @Path("/retention/run")
+    public Uni<Response> runRetention() {
+        return retentionPurgeService.purgeRejected()
+                .chain(() -> retentionPurgeService.anonymizeCompleted())
+                .onItem().transform(v -> Response.noContent().build());
     }
 }

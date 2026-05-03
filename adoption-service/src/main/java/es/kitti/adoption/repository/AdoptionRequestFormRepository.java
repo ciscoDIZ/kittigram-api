@@ -16,4 +16,9 @@ public class AdoptionRequestFormRepository implements PanacheRepository<Adoption
         if (requestIds.isEmpty()) return io.smallrye.mutiny.Uni.createFrom().item(0);
         return update("allergiesDetail = null where adoptionRequestId in ?1", requestIds);
     }
+
+    public Uni<Long> deleteByRequestIds(java.util.List<Long> requestIds) {
+        if (requestIds.isEmpty()) return io.smallrye.mutiny.Uni.createFrom().item(0L);
+        return delete("adoptionRequestId in ?1", requestIds);
+    }
 }
