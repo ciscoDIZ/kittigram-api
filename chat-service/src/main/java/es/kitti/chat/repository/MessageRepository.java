@@ -18,4 +18,9 @@ public class MessageRepository implements PanacheRepository<Message> {
         return update("senderId = 0L where senderId = ?1 and senderType = ?2",
                 userId, es.kitti.chat.entity.SenderType.User);
     }
+
+    public Uni<Long> deleteByConversationIds(List<Long> conversationIds) {
+        if (conversationIds.isEmpty()) return Uni.createFrom().item(0L);
+        return delete("conversationId in ?1", conversationIds);
+    }
 }

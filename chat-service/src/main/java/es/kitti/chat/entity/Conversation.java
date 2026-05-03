@@ -24,6 +24,9 @@ public class Conversation extends PanacheEntity {
     @Column
     public LocalDateTime lastMessageAt;
 
+    @Column
+    public LocalDateTime closedAt;
+
     @PrePersist
     public void prePersist() {
         if (createdAt == null) createdAt = LocalDateTime.now();
