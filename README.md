@@ -23,6 +23,7 @@ Microservices backend for Kitties, a cat adoption platform for shelters and vete
 - [Environment Variables](#environment-variables)
 - [Roadmap](#roadmap)
 - [Privacy & Data Protection](PRIVACY.md)
+- [Developer Onboarding Guide](ONBOARDING.md)
 
 ---
 
