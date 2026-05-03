@@ -6,6 +6,8 @@ import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import es.kitti.auth.entity.RefreshToken;
 
+import java.time.LocalDateTime;
+
 
 @ApplicationScoped
 public class RefreshTokenRepository implements PanacheRepository<RefreshToken> {
@@ -20,5 +22,9 @@ public class RefreshTokenRepository implements PanacheRepository<RefreshToken> {
 
     public Uni<Long> deleteAllByUserId(Long userId) {
         return delete("userId", userId);
+    }
+
+    public Uni<Long> deleteExpiredOrRevoked() {
+        return delete("revoked = true or expiresAt < ?1", LocalDateTime.now());
     }
 }

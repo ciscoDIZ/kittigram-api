@@ -7,6 +7,7 @@ import io.smallrye.mutiny.Uni;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.Consumes;
 import jakarta.ws.rs.DELETE;
+import jakarta.ws.rs.POST;
 import jakarta.ws.rs.Path;
 import jakarta.ws.rs.PathParam;
 import jakarta.ws.rs.Produces;
@@ -27,6 +28,14 @@ public class AuthInternalResource {
     @WithTransaction
     public Uni<Response> deleteTokensByUser(@PathParam("userId") Long userId) {
         return refreshTokenRepository.deleteAllByUserId(userId)
+                .onItem().transform(count -> Response.noContent().build());
+    }
+
+    @POST
+    @Path("/purge/tokens")
+    @WithTransaction
+    public Uni<Response> purgeExpiredTokens() {
+        return refreshTokenRepository.deleteExpiredOrRevoked()
                 .onItem().transform(count -> Response.noContent().build());
     }
 }
