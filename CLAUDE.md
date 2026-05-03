@@ -115,6 +115,111 @@ public enum AdoptionStatus { Pending, Reviewing, Accepted, Rejected, Completed }
   ```
 - `@Incoming` (Kafka) + `@WithTransaction` combinados directamente → fallo. Delegar la persistencia a un bean separado.
 
+## Autenticación interna (servicio-a-servicio)
+
+Algunos endpoints no deben ser accesibles por usuarios ni por el gateway — solo por otros servicios del sistema (p.ej. `schedule-service` disparando un job, o `user-service` llamando a `adoption-service` durante un borrado). Para esto existe el patrón `@InternalOnly`.
+
+### Cómo funciona
+
+Se basa en el mecanismo `@NameBinding` de JAX-RS: una anotación personalizada que enlaza un `ContainerRequestFilter` únicamente a los recursos o métodos marcados con ella. El filtro comprueba el header `X-Internal-Token` contra el secreto compartido `kitties.internal.secret`. Si no coincide, aborta con 401.
+
+```
+petición entrante
+      │
+      ▼
+InternalTokenFilter.filter()          ← solo se ejecuta en métodos/clases @InternalOnly
+  compara X-Internal-Token con kitties.internal.secret
+  ✗ → 401 Unauthorized
+  ✓ → continúa al resource
+```
+
+### Los dos ficheros que se copian en cada servicio
+
+Ambos viven en `<servicio>/src/main/java/es/kitti/<servicio>/security/`:
+
+**`InternalOnly.java`** — la anotación de binding (idéntica en todos los servicios):
+```java
+@NameBinding
+@Retention(RetentionPolicy.RUNTIME)
+@Target({ElementType.TYPE, ElementType.METHOD})
+public @interface InternalOnly {}
+```
+
+**`InternalTokenFilter.java`** — el filtro que valida el header:
+```java
+@Provider
+@InternalOnly                                   // ← el binding enlaza filtro y anotación
+public class InternalTokenFilter implements ContainerRequestFilter {
+
+    public static final String HEADER = "X-Internal-Token";
+
+    @ConfigProperty(name = "kitties.internal.secret")
+    String secret;
+
+    @Override
+    public void filter(ContainerRequestContext ctx) {
+        String token = ctx.getHeaderString(HEADER);
+        if (token == null || !token.equals(secret)) {
+            ctx.abortWith(Response.status(Response.Status.UNAUTHORIZED)
+                    .type(MediaType.APPLICATION_JSON)
+                    .entity("{\"status\":401,\"message\":\"Missing or invalid internal token\"}")
+                    .build());
+        }
+    }
+}
+```
+
+> **Por qué no hay un módulo Maven compartido:** La regla de arquitectura prohíbe dependencias Maven entre módulos. Además, son ~60 líneas de código sin lógica de negocio que no evoluciona. El coste de la duplicación es menor que el acoplamiento en compilación que introduciría un módulo compartido. Si la implementación cambiara (p.ej. HMAC en lugar de secreto plano), el cambio es mecánico en los 5 servicios afectados.
+
+### Servicios que ya tienen el patrón
+
+| Servicio | Ruta de los ficheros |
+|---|---|
+| `cat-service` | `security/InternalOnly.java`, `security/InternalTokenFilter.java` |
+| `adoption-service` | `security/InternalOnly.java`, `security/InternalTokenFilter.java` |
+| `auth-service` | `security/InternalOnly.java`, `security/InternalTokenFilter.java` |
+| `chat-service` | `security/InternalOnly.java`, `security/InternalTokenFilter.java` |
+| `user-service` | `security/InternalOnly.java`, `security/InternalTokenFilter.java` |
+
+### Cómo añadir el patrón a un nuevo servicio
+
+1. Copiar los dos ficheros a `<servicio>/src/main/java/es/kitti/<servicio>/security/` ajustando el `package`.
+2. Verificar que `application.properties` tenga la config del secreto (igual en todos los servicios):
+   ```properties
+   %dev.kitties.internal.secret=${KITTIES_INTERNAL_SECRET:kitties-dev-secret}
+   %prod.kitties.internal.secret=${KITTIES_INTERNAL_SECRET}
+   %test.kitties.internal.secret=test-internal-secret
+   ```
+3. Anotar el resource o el método con `@InternalOnly`:
+   ```java
+   @Path("/foo/internal")
+   @InternalOnly                    // ← toda la clase queda protegida
+   public class FooInternalResource { ... }
+   ```
+
+### Cómo llamar a un endpoint interno desde otro servicio
+
+El cliente REST debe enviar el secreto en el header. Patrón estándar con MicroProfile REST Client:
+
+```java
+@RegisterRestClient(configKey = "foo-service")
+@Path("/foo/internal")
+public interface FooInternalClient {
+
+    @POST
+    @Path("/alguna-accion")
+    Uni<Response> ejecutar(@HeaderParam("X-Internal-Token") String token);
+}
+```
+
+En el servicio llamante, inyectar `@ConfigProperty(name = "kitties.internal.secret") String internalSecret` y pasarlo al método del cliente.
+
+### Regla: nunca exponer endpoints `@InternalOnly` por el gateway
+
+El gateway (`gateway-service`, puerto 8080) no debe hacer proxy de rutas `/*/internal/*`. Estos endpoints deben ser accesibles únicamente desde la red interna de contenedores, no desde internet.
+
+---
+
 ## Gotchas conocidos
 - Records Java: añadir `@JsonProperty` en cada campo, o registrar `ParameterNamesModule` en JacksonConfig.
 - `"order"` es palabra reservada HQL → usar `imageOrder` con `@Column(name = "image_order")`.
@@ -122,7 +227,7 @@ public enum AdoptionStatus { Pending, Reviewing, Accepted, Rejected, Completed }
 - Borrado de usuarios: lógico (status → Inactive), nunca físico.
 - `ProxyService` explota con NPE si la respuesta upstream no tiene body (ej. 204). Siempre guardar `r.body() != null`.
 - `JwtAuthFilter` tiene una lista explícita de rutas públicas (`PUBLIC_EXACT`). Añadir ahí cualquier endpoint nuevo que no requiera Bearer token.
-- **Auth servicio-a-servicio (interno)**: usar el secreto compartido `kitties.internal.secret` (mismo valor en todos los servicios; en dev `kitties-dev-secret`, en prod via env `KITTIES_INTERNAL_SECRET`). Para gRPC: metadata `x-internal-token` validada por interceptors (`GrpcAuthInterceptor` en el server, `GrpcClientAuthInterceptor` en el client). Para HTTP: header `X-Internal-Token` validado por un `ContainerRequestFilter` con la annotation `@InternalOnly` (referencia: `cat-service/security/InternalTokenFilter.java`). Nunca exponer endpoints `@InternalOnly` por el gateway.
+- **Auth servicio-a-servicio (interno)**: ver sección completa **"Autenticación interna (servicio-a-servicio)"** más arriba. Resumen: para HTTP usar `@InternalOnly` + `X-Internal-Token`; para gRPC usar metadata `x-internal-token` validada por `GrpcAuthInterceptor` (server) / `GrpcClientAuthInterceptor` (client).
 - El rate limiter (`IpRateLimiter`) usa email como clave para login y IP para el resto. No cambiar a global o los tests se contaminarán entre sí.
 - **Tests e2e + rate limiter**: enviar siempre `X-Forwarded-For: TEST_IP` (único por ejecución, ej. `"test-" + System.currentTimeMillis()`) en los requests que consuman del mismo bucket de rate limit. Sin esto los tests se contaminan entre ejecuciones dentro de la ventana de 60 s.
 - **`minio/minio:latest` NO crea buckets automáticamente** con `MINIO_DEFAULT_BUCKETS` (eso es una feature de `bitnami/minio`). Usar un `BucketInitializer` (`@Observes StartupEvent`) que haga `headBucket` → `createBucket` con `S3AsyncClient.get()` (bloqueante en startup está bien).
