@@ -11,7 +11,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Servicios y puertos
 
-Los 10 servicios son todos activos e intencionales. No eliminar ninguno de esta tabla; los puertos están verificados contra `application.properties` de cada módulo.
+Los 11 servicios son todos activos e intencionales. No eliminar ninguno de esta tabla; los puertos están verificados contra `application.properties` de cada módulo.
 
 | Servicio             | HTTP | gRPC        | Rutas públicas (sin JWT)                        |
 |----------------------|------|-------------|-------------------------------------------------|
@@ -25,6 +25,7 @@ Los 10 servicios son todos activos e intencionales. No eliminar ninguno de esta 
 | form-analysis-service| 8087 | —           | —                                               |
 | organization-service | 8088 | —           | —                                               |
 | chat-service         | 8089 | —           | —                                               |
+| schedule-service     | 8090 | —           | — (sin endpoints públicos; solo `/q/health`)    |
 
 ## Arquitectura — reglas duras
 - Sin dependencias Maven entre módulos. Comunicación solo vía gRPC o Kafka.

@@ -30,6 +30,7 @@
         <module>form-analysis-service</module>
         <module>organization-service</module>
         <module>chat-service</module>
+        <module>schedule-service</module>
     </modules>
 
     <dependencyManagement>
