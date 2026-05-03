@@ -9,6 +9,7 @@ import es.kitti.user.entity.User;
 import es.kitti.user.entity.UserStatus;
 import es.kitti.user.exception.UserNotFoundException;
 
+import java.time.LocalDateTime;
 import java.util.List;
 
 @ApplicationScoped
@@ -38,5 +39,10 @@ public class UserRepository implements PanacheRepository<User> {
     @WithSession
     public Uni<User> findByActivationToken(String token) {
         return find("activationToken", token).firstResult();
+    }
+
+    public Uni<Long> deleteExpiredUnactivated() {
+        return delete("status = ?1 and activationTokenExpiresAt < ?2 and deletedAt is null",
+                UserStatus.Inactive, LocalDateTime.now());
     }
 }

@@ -90,6 +90,13 @@ public class ErasureService {
                 .replaceWithVoid();
     }
 
+    @WithTransaction
+    public Uni<Void> purgeExpiredUnactivatedUsers() {
+        return userRepository.deleteExpiredUnactivated()
+                .invoke(count -> Log.infof("Purged %d expired unactivated users", count))
+                .replaceWithVoid();
+    }
+
     @WithSession
     public Uni<Void> purgeEligibleUsers() {
         return erasureRequestRepository.findEligibleForPurge()
