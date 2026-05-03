@@ -195,8 +195,26 @@ Conversations between an adopter and an organization, opened after an intake is 
 
 **Internal (service-to-service, `X-Internal-Token`)**:
 - `POST /chats/internal/conversations` — open a conversation `(intakeRequestId, userId, organizationId)`. Intended caller is `adoption-service` after an intake approval.
+- `POST /chats/internal/retention/run` — purge messages and conversations inactive for more than 1 year. Caller: `schedule-service`.
+- `DELETE /chats/internal/users/{userId}` — anonymise all messages from a user (GDPR Art. 17). Caller: `user-service` erasure flow.
 
 **Moderation:** organizations can block a user via `(organizationId, userId)` pair (scope is the pair, not the conversation). Blocked users keep read access but their `POST /chats/{id}/messages` returns **403**. Global user bans (`UserStatus.Banned`) are deferred until a real case appears.
+
+---
+
+### schedule-service — port 8090
+
+Centralised scheduler. No public endpoints, no database, no Kafka. Fires data-retention and erasure-purge jobs on the other services via internal HTTP calls (`X-Internal-Token`), decoupling cron logic from business services.
+
+| Cron | Target | What it triggers |
+|------|--------|-----------------|
+| daily 02:00 | `user-service` | Erasure purge — anonymise users whose 30-day grace period has elapsed |
+| daily 02:15 | `user-service` | Delete `Inactive` accounts with an expired activation token |
+| daily 02:30 | `adoption-service` | Delete rejected requests older than 1 year; anonymise PII in completed forms older than 5 years |
+| daily 04:00 | `chat-service` | Delete conversations (and their messages) inactive for more than 1 year |
+| Sunday 03:00 | `auth-service` | Delete expired or revoked refresh tokens |
+
+**Only `/q/health/live` is accessible from the network** — all other routes are absent.
 
 ---
 
@@ -215,15 +233,16 @@ Three isolated networks. Only the gateway is reachable from the internet.
                         ┌──────────────▼──────────────────────────────┐
                         │  PRIVATE NETWORK                            │
                         │                                             │
-                        │  user-service        :8081  gRPC :9090      │
-                        │  auth-service        :8082  gRPC :9091      │
-                        │  cat-service         :8084                  │
-                        │  storage-service     :8083                  │
+                        │  user-service         :8081  gRPC :9090     │
+                        │  auth-service         :8082  gRPC :9091     │
+                        │  cat-service          :8084                 │
+                        │  storage-service      :8083                 │
                         │  notification-service :8085                 │
-                        │  adoption-service    :8086                  │
+                        │  adoption-service     :8086                 │
                         │  form-analysis-service :8087                │
                         │  organization-service :8088                 │
-                        │  chat-service        :8089                  │
+                        │  chat-service         :8089                 │
+                        │  schedule-service     :8090                 │
                         └──────────────┬──────────────────────────────┘
                                        │
                         ┌──────────────▼──────────────────────────────┐
@@ -251,6 +270,7 @@ Implemented via Docker networks (dev/staging) or Kubernetes NetworkPolicy (produ
 | form-analysis-service | 8087  | —     |
 | organization-service  | 8088  | —     |
 | chat-service          | 8089  | —     |
+| schedule-service      | 8090  | —     |
 | PostgreSQL            | 5432  | —     |
 | MinIO API             | 9000  | —     |
 | MinIO Console         | 9001  | —     |
@@ -443,14 +463,14 @@ Subsequent renewals are handled automatically by the `certbot` service (every 12
 docker compose -f docker-compose.prod.yml up -d
 ```
 
-This starts PostgreSQL 16, MinIO, Zookeeper, Kafka, all 9 application services, Nginx (ports 80/443), and the Certbot renewal daemon.
+This starts PostgreSQL 16, MinIO, Zookeeper, Kafka, all 11 application services, Nginx (ports 80/443), and the Certbot renewal daemon.
 Traffic enters via Nginx on **port 443** (HTTPS); HTTP redirects to HTTPS automatically.
 
 ### CI/CD Pipeline
 
 The GitHub Actions workflow at `.github/workflows/ci-cd.yml` runs on every push to `main`:
 
-1. **Test matrix** — runs `mvn test` in parallel for all 9 services
+1. **Test matrix** — runs `mvn test` in parallel for all 11 services
 2. **Build & push** — builds Docker images and pushes to Docker Hub as `<DOCKERHUB_USERNAME>/kitties-<service>:latest`
 
 Pull requests trigger only the test matrix (no image push).
@@ -532,6 +552,50 @@ There are no database foreign keys between services. Referential integrity is en
 The two guards together close the invariant: a cat cannot be deleted while adoptions are in flight, and in-flight adoptions cannot advance once the cat is gone. Terminal transitions (`Rejected`, `Completed`) skip the cat check — they must always be allowed to drain state cleanly.
 
 Future: when a user or organisation is deactivated, `user-service` / `organization-service` will emit a Kafka event (`user-deactivated`, `organization-deactivated`) and `adoption-service` will cancel their active requests.
+
+### Internal service-to-service authentication (`@InternalOnly`)
+
+Some endpoints must only be reachable by other services inside the private network — never by users or through the gateway. The `@InternalOnly` pattern handles this without JWT.
+
+**How it works:** a JAX-RS `@NameBinding` annotation binds a `ContainerRequestFilter` exclusively to resources or methods tagged with `@InternalOnly`. The filter checks the `X-Internal-Token` header against the shared secret `kitties.internal.secret` and aborts with 401 if it does not match.
+
+```
+incoming request
+      │
+      ▼
+InternalTokenFilter.filter()        ← runs only on @InternalOnly methods/classes
+  compare X-Internal-Token with kitties.internal.secret
+  ✗ → 401 Unauthorized
+  ✓ → proceed to resource
+```
+
+**Shared secret:** same value across all services. Dev default: `kitties-dev-secret`. Production: inject via `KITTIES_INTERNAL_SECRET` env var / Docker Secret.
+
+**Caller side** (MicroProfile REST Client):
+```java
+@RegisterRestClient(configKey = "foo-service")
+@Path("/foo/internal")
+public interface FooInternalClient {
+
+    @POST
+    @Path("/some-action")
+    Uni<Response> trigger(@HeaderParam("X-Internal-Token") String token);
+}
+```
+Inject `@ConfigProperty(name = "kitties.internal.secret") String internalSecret` in the caller and pass it to the method.
+
+**Server side:**
+```java
+@Path("/foo/internal")
+@InternalOnly          // ← entire class is protected; can also be applied per method
+public class FooInternalResource { ... }
+```
+
+**Two files to copy** into `security/` when adding the pattern to a new service (`InternalOnly.java` + `InternalTokenFilter.java`). They are intentionally duplicated across services — a shared Maven module would introduce compile-time coupling that microservices are designed to avoid. See [CLAUDE.md — Autenticación interna](CLAUDE.md#autenticación-interna-servicio-a-servicio) for the copy-paste guide, the rationale, and the list of services that already have it.
+
+**Rule:** the gateway must never proxy routes matching `/*/internal/*`. These endpoints are accessible only from the container private network.
+
+---
 
 ### Value Objects
 
