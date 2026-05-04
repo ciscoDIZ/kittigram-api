@@ -10,6 +10,10 @@ import io.quarkus.test.security.jwt.JwtSecurity;
 import io.restassured.http.ContentType;
 import io.smallrye.mutiny.Uni;
 import io.smallrye.reactive.messaging.memory.InMemoryConnector;
+import io.quarkus.vertx.core.runtime.context.VertxContextSafetyToggle;
+import io.smallrye.common.vertx.VertxContext;
+import io.vertx.core.Context;
+import io.vertx.core.Vertx;
 import jakarta.inject.Inject;
 import jakarta.ws.rs.core.Response;
 import es.kitti.adoption.client.CatClient;
@@ -19,6 +23,9 @@ import es.kitti.adoption.test.KafkaTestResource;
 import org.eclipse.microprofile.rest.client.inject.RestClient;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.TimeUnit;
 
 import static io.restassured.RestAssured.given;
 import static org.hamcrest.Matchers.*;
@@ -36,10 +43,28 @@ class AdoptionResourceTest {
     @Inject
     AdoptionRequestRepository adoptionRequestRepository;
 
+    @Inject
+    Vertx vertx;
+
     @BeforeEach
     void mockCatClient() {
         when(catClient.findById(anyLong()))
                 .thenReturn(Uni.createFrom().item(Response.ok().build()));
+    }
+
+    private AdoptionRequest persistInContext(AdoptionRequest adoption) {
+        CompletableFuture<AdoptionRequest> future = new CompletableFuture<>();
+        Context duplicated = VertxContext.getOrCreateDuplicatedContext(vertx);
+        VertxContextSafetyToggle.setContextSafe(duplicated, true);
+        duplicated.runOnContext(__ ->
+                Panache.withTransaction(() -> adoptionRequestRepository.persist(adoption))
+                        .subscribe().with(future::complete, future::completeExceptionally)
+        );
+        try {
+            return future.get(5, TimeUnit.SECONDS);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
     }
 
     @Test
@@ -317,8 +342,7 @@ class AdoptionResourceTest {
         adoption.adopterId = 1L;
         adoption.organizationId = 2L;
         adoption.adopterEmail = "adopter@kitti.es";
-        AdoptionRequest saved = Panache.withTransaction(() -> adoptionRequestRepository.persist(adoption))
-                .await().indefinitely();
+        AdoptionRequest saved = persistInContext(adoption);
 
         when(catClient.findById(55L))
                 .thenReturn(Uni.createFrom().item(Response.status(404).build()));
@@ -346,8 +370,7 @@ class AdoptionResourceTest {
         adoption.adopterId = 1L;
         adoption.organizationId = 2L;
         adoption.adopterEmail = "adopter@kitti.es";
-        AdoptionRequest saved = Panache.withTransaction(() -> adoptionRequestRepository.persist(adoption))
-                .await().indefinitely();
+        AdoptionRequest saved = persistInContext(adoption);
 
         when(catClient.findById(56L))
                 .thenReturn(Uni.createFrom().item(Response.status(404).build()));
