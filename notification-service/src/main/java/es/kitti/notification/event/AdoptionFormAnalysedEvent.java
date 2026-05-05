@@ -7,5 +7,5 @@ public record AdoptionFormAnalysedEvent(
         int criticalFlags,
         int warningFlags,
         int noticeFlags,
-        String adopterEmail
+        Long adopterId
 ) {}
