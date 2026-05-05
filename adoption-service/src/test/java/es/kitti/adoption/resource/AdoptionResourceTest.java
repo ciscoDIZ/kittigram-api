@@ -1,5 +1,8 @@
 package es.kitti.adoption.resource;
 
+import es.kitti.adoption.entity.AdoptionRequest;
+import es.kitti.adoption.repository.AdoptionRequestRepository;
+import io.quarkus.hibernate.reactive.panache.Panache;
 import io.quarkus.test.InjectMock;
 import io.quarkus.test.common.QuarkusTestResource;
 import io.quarkus.test.junit.QuarkusTest;
@@ -353,7 +356,7 @@ class AdoptionResourceTest {
                 { "status": "Accepted", "reason": null }
                 """)
                 .when()
-                .patch("/adoptions/" + adoptionId + "/status")
+                .patch("/adoptions/" + saved.id + "/status")
                 .then()
                 .statusCode(409);
     }
@@ -381,7 +384,7 @@ class AdoptionResourceTest {
                 { "status": "Rejected", "reason": "Cat no longer available" }
                 """)
                 .when()
-                .patch("/adoptions/" + adoptionId + "/status")
+                .patch("/adoptions/" + saved.id + "/status")
                 .then()
                 .statusCode(200)
                 .body("status", equalTo("Rejected"));
