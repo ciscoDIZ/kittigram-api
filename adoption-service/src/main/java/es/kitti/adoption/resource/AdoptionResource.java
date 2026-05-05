@@ -8,9 +8,12 @@ import jakarta.validation.Valid;
 import jakarta.ws.rs.*;
 import jakarta.ws.rs.core.MediaType;
 import jakarta.ws.rs.core.Response;
+import es.kitti.adoption.client.UserServiceClient;
 import es.kitti.adoption.dto.*;
 import es.kitti.adoption.service.AdoptionService;
+import org.eclipse.microprofile.config.inject.ConfigProperty;
 import org.eclipse.microprofile.jwt.JsonWebToken;
+import org.eclipse.microprofile.rest.client.inject.RestClient;
 
 import java.util.List;
 
@@ -26,12 +29,19 @@ public class AdoptionResource {
     @Inject
     JsonWebToken jwt;
 
+    @RestClient
+    UserServiceClient userServiceClient;
+
+    @ConfigProperty(name = "kitties.internal.secret")
+    String internalSecret;
+
     @POST
     @RolesAllowed("User")
     public Uni<Response> createAdoptionRequest(@Valid AdoptionRequestCreateRequest request) {
         Long adopterId = Long.parseLong(jwt.getSubject());
-        String adopterEmail = jwt.getClaim("email");
-        return adoptionService.createAdoptionRequest(request, adopterId, adopterEmail)
+        return userServiceClient.findById(adopterId, internalSecret)
+                .onItem().transformToUni(user ->
+                        adoptionService.createAdoptionRequest(request, adopterId, user.email()))
                 .onItem().transform(r -> Response.status(Response.Status.CREATED).entity(r).build());
     }
 
