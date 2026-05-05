@@ -315,7 +315,8 @@ class AdoptionJourneyE2E {
                 "acceptsVetVisits", true,
                 "acceptsFollowUpContact", true,
                 "acceptsReturnIfNeeded", true,
-                "acceptsTermsAndConditions", true
+                "acceptsTermsAndConditions", true,
+                "consentHealthData", true
             ))
         .when()
             .post("/api/adoptions/" + adoptionId + "/adoption-form")
