@@ -84,7 +84,7 @@ public class FormAnalysisService {
                                 event.adoptionRequestId(),
                                 decision.name(),
                                 rejectionReason,
-                                event.adopterEmail(),
+                                event.adopterId(),
                                 (int) criticalCount,
                                 (int) warningCount,
                                 (int) noticeCount

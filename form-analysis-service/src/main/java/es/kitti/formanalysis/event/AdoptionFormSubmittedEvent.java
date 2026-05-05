@@ -5,7 +5,6 @@ public record AdoptionFormSubmittedEvent(
         Long catId,
         Long adopterId,
         Long organizationId,
-        String adopterEmail,
         Boolean hasPreviousCatExperience,
         String previousPetsHistory,
         Integer adultsInHousehold,
