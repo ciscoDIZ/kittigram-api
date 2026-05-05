@@ -109,7 +109,7 @@ Incumplimientos que la AEPD considera graves y que pueden generar sanción antes
 **Riesgo:** Los datos de salud son categoría especial (Art. 9 RGPD). El `acceptsTermsAndConditions` actual no es un consentimiento explícito para esta categoría.
 **Solución implementada:** Campo `consent_health_data BOOLEAN NOT NULL` añadido a `adoption_forms` (V4) con consentimiento separado y explícito. El campo `consentHealthData: true` es obligatorio (`@NotNull`) al enviar el formulario de adopción. Los registros anteriores a la migración quedan con `false` y deberán re-enviarse.
 
-### C-3 — Derecho al olvido no implementado (Art. 17 RGPD)
+### C-3 — Derecho al olvido no implementado (Art. 17 RGPD) ✅ resuelto
 
 **Afecta a:** todos los servicios
 **Riesgo:** Un usuario puede exigir legalmente el borrado de sus datos. El borrado lógico actual (`status → Inactive`) no satisface este derecho — los datos permanecen en BD indefinidamente.
@@ -165,7 +165,7 @@ CREATE TABLE audit.erasure_requests (
 
 Este registro es **append-only e inmutable** — ni el usuario ni un admin pueden eliminarlo. Sirve simultáneamente como prueba de cumplimiento ante la AEPD (accountability, art. 5.2) y como evidencia forense en caso de investigación.
 
-### C-4 — Sin política de retención de datos (Art. 5.1.e RGPD)
+### C-4 — Sin política de retención de datos (Art. 5.1.e RGPD) ✅ resuelto
 
 **Afecta a:** todos los servicios
 **Riesgo:** Los datos no se deben conservar más tiempo del necesario para la finalidad. Sin plazos definidos, cualquier dato almacenado indefinidamente es un incumplimiento.
@@ -242,9 +242,9 @@ En producción las imágenes se alojan en Cloudflare R2. Las imágenes de gatos 
 |---|---|---|---|---|
 | C-1 | Cifrar DNI/NIE | adoption-service | medio | 🔴 crítico |
 | C-2 | Consentimiento explícito datos de salud | adoption-service + frontend | bajo | ✅ resuelto (backend) |
-| C-3 | Derecho al olvido (borrado/anonimización) | user, adoption, auth, chat | alto | 🔴 crítico |
-| C-4 | Política de retención + jobs de purga | auth, adoption, chat | medio | 🔴 crítico |
-| I-1 | Quitar datos personales del evento Kafka | adoption, form-analysis | bajo | 🟠 importante |
+| C-3 | Derecho al olvido (borrado/anonimización) | user, adoption, auth, chat | alto | ✅ resuelto |
+| C-4 | Política de retención + jobs de purga | auth, adoption, chat | medio | ✅ resuelto |
+| I-1 | Quitar datos personales del evento Kafka | adoption, form-analysis | bajo | ✅ resuelto |
 | I-2 | Quitar email del JWT | auth + todos los consumidores | alto | 🟠 importante |
 | I-3 | Quitar `adopter_email` de adoption_requests | adoption-service | medio | 🟠 importante |
 | I-4 | Job de purga de refresh tokens | auth-service | bajo | 🟠 importante |
