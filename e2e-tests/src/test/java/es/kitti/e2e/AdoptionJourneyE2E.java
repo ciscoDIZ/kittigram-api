@@ -305,18 +305,18 @@ class AdoptionJourneyE2E {
         given()
             .contentType(ContentType.JSON)
             .header("Authorization", "Bearer " + adopterToken)
-            .body(Map.of(
-                "fullName", "Test Adopter",
-                "idNumber", "12345678A",
-                "phone", "600000000",
-                "address", "Calle Mayor 1",
-                "city", "Madrid",
-                "postalCode", "28001",
-                "acceptsVetVisits", true,
-                "acceptsFollowUpContact", true,
-                "acceptsReturnIfNeeded", true,
-                "acceptsTermsAndConditions", true,
-                "consentHealthData", true
+            .body(Map.ofEntries(
+                Map.entry("fullName", "Test Adopter"),
+                Map.entry("idNumber", "12345678A"),
+                Map.entry("phone", "600000000"),
+                Map.entry("address", "Calle Mayor 1"),
+                Map.entry("city", "Madrid"),
+                Map.entry("postalCode", "28001"),
+                Map.entry("acceptsVetVisits", true),
+                Map.entry("acceptsFollowUpContact", true),
+                Map.entry("acceptsReturnIfNeeded", true),
+                Map.entry("acceptsTermsAndConditions", true),
+                Map.entry("consentHealthData", true)
             ))
         .when()
             .post("/api/adoptions/" + adoptionId + "/adoption-form")
