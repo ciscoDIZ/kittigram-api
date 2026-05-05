@@ -41,6 +41,14 @@ public class UserService {
     ObjectMapper objectMapper;
 
     @WithSession
+    public Uni<UserResponse> findById(Long id) {
+        return userRepository.findById(id)
+                .onItem().ifNull()
+                .failWith(() -> new UserNotFoundException(String.valueOf(id)))
+                .onItem().transform(userMapper::toResponse);
+    }
+
+    @WithSession
     public Uni<UserResponse> findByEmail(String email) {
         return userRepository.findByEmail(Email.of(email).value())
                 .onItem().ifNull()
