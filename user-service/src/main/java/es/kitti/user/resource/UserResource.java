@@ -44,10 +44,8 @@ public class UserResource {
     @APIResponse(responseCode = "404", description = "User not found")
     public Uni<Response> findByEmail(
             @Parameter(description = "User email") @PathParam("email") String email) {
-        requireSelf(email);
-        return userService.findByEmail(email)
-                .onItem().transform(Response::ok)
-                .onItem().transform(Response.ResponseBuilder::build);
+        return requireSelf(email)
+                .onItem().transform(user -> Response.ok(user).build());
     }
 
     @GET
@@ -83,8 +81,8 @@ public class UserResource {
     public Uni<Response> updateUser(
             @Parameter(description = "User email") @PathParam("email") String email,
             UserUpdateRequest request) {
-        requireSelf(email);
-        return userService.updateUser(email, request)
+        return requireSelf(email)
+                .chain(ignored -> userService.updateUser(email, request))
                 .onItem().transform(user -> Response.ok(user).build());
     }
 
@@ -96,8 +94,8 @@ public class UserResource {
     @APIResponse(responseCode = "403", description = "Forbidden")
     public Uni<Response> deactivateUser(
             @Parameter(description = "User email") @PathParam("email") String email) {
-        requireSelf(email);
-        return userService.deactivateUser(email)
+        return requireSelf(email)
+                .chain(ignored -> userService.deactivateUser(email))
                 .onItem().transform(user -> Response.ok(user).build());
     }
 
@@ -109,8 +107,8 @@ public class UserResource {
     @APIResponse(responseCode = "403", description = "Forbidden")
     public Uni<Response> activateUser(
             @Parameter(description = "User email") @PathParam("email") String email) {
-        requireSelf(email);
-        return userService.activateUser(email)
+        return requireSelf(email)
+                .chain(ignored -> userService.activateUser(email))
                 .onItem().transform(user -> Response.ok(user).build());
     }
 
@@ -125,10 +123,13 @@ public class UserResource {
                 .onItem().transform(user -> Response.ok(user).build());
     }
 
-    private void requireSelf(String email) {
-        String tokenEmail = jwt.getClaim("email");
-        if (!email.equals(tokenEmail)) {
-            throw new ForbiddenException("Access denied");
-        }
+    private Uni<UserResponse> requireSelf(String email) {
+        Long callerId = Long.parseLong(jwt.getSubject());
+        return userService.findByEmail(email)
+                .onItem().invoke(user -> {
+                    if (!user.id().equals(callerId)) {
+                        throw new ForbiddenException("Access denied");
+                    }
+                });
     }
 }
