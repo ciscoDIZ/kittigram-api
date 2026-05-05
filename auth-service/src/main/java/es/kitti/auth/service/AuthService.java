@@ -75,7 +75,7 @@ public class AuthService {
     }
 
     private Uni<AuthResponse> generateTokens(long userId, String email, String role) {
-        String accessToken = jwtTokenService.generateAccessToken(userId, email, role);
+        String accessToken = jwtTokenService.generateAccessToken(userId, role);
 
         RefreshToken refreshToken = new RefreshToken();
         refreshToken.token = UUID.randomUUID().toString();

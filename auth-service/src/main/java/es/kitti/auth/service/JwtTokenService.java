@@ -12,10 +12,9 @@ public class JwtTokenService {
     @ConfigProperty(name = "mp.jwt.verify.issuer")
     String issuer;
 
-    public String generateAccessToken(long userId, String email, String role) {
+    public String generateAccessToken(long userId, String role) {
         return Jwt.issuer(issuer)
                 .subject(String.valueOf(userId))
-                .claim("email", email)
                 .groups(Set.of(role))
                 .expiresIn(900)
                 .sign();
