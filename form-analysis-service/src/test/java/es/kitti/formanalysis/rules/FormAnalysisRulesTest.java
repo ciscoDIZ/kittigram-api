@@ -17,7 +17,7 @@ class FormAnalysisRulesTest {
 
     private AdoptionFormSubmittedEvent buildCleanEvent() {
         return new AdoptionFormSubmittedEvent(
-                1L, 10L, 100L, 200L, "adopter@kitti.es",
+                1L, 10L, 100L, 200L,
                 true, "Murió de vejez", 2, false, null,
                 false, null, 8, true, null,
                 "Apartment", 70, false, false, null,
@@ -40,7 +40,7 @@ class FormAnalysisRulesTest {
     @Test
     void physicalPunishment_triggersCriticalFlag() {
         var event = new AdoptionFormSubmittedEvent(
-                1L, 10L, 100L, 200L, "adopter@kitti.es",
+                1L, 10L, 100L, 200L,
                 true, null, 2, false, null,
                 false, null, 8, true, null,
                 "Apartment", 70, false, false, null,
@@ -60,7 +60,7 @@ class FormAnalysisRulesTest {
     @Test
     void rentalWithoutPermission_triggersCriticalFlag() {
         var event = new AdoptionFormSubmittedEvent(
-                1L, 10L, 100L, 200L, "adopter@kitti.es",
+                1L, 10L, 100L, 200L,
                 true, null, 2, false, null,
                 false, null, 8, true, null,
                 "Apartment", 70, false, true, false,
@@ -79,7 +79,7 @@ class FormAnalysisRulesTest {
     @Test
     void allergyConfirmed_triggersCriticalFlag() {
         var event = new AdoptionFormSubmittedEvent(
-                1L, 10L, 100L, 200L, "adopter@kitti.es",
+                1L, 10L, 100L, 200L,
                 true, null, 2, false, null,
                 false, null, 8, true, null,
                 "Apartment", 70, false, false, null,
@@ -98,7 +98,7 @@ class FormAnalysisRulesTest {
     @Test
     void insufficientPlayTime_triggersWarningFlag() {
         var event = new AdoptionFormSubmittedEvent(
-                1L, 10L, 100L, 200L, "adopter@kitti.es",
+                1L, 10L, 100L, 200L,
                 true, null, 2, false, null,
                 false, null, 8, true, null,
                 "Apartment", 70, false, false, null,
@@ -117,7 +117,7 @@ class FormAnalysisRulesTest {
     @Test
     void noEnrichmentSpace_triggersWarningFlag() {
         var event = new AdoptionFormSubmittedEvent(
-                1L, 10L, 100L, 200L, "adopter@kitti.es",
+                1L, 10L, 100L, 200L,
                 true, null, 2, false, null,
                 false, null, 8, true, null,
                 "Apartment", 70, false, false, null,
@@ -136,7 +136,7 @@ class FormAnalysisRulesTest {
     @Test
     void smallHousing_triggersNoticeFlag() {
         var event = new AdoptionFormSubmittedEvent(
-                1L, 10L, 100L, 200L, "adopter@kitti.es",
+                1L, 10L, 100L, 200L,
                 true, null, 2, false, null,
                 false, null, 8, true, null,
                 "Apartment", 30, false, false, null,
@@ -155,7 +155,7 @@ class FormAnalysisRulesTest {
     @Test
     void multipleCriticalFlags_allDetected() {
         var event = new AdoptionFormSubmittedEvent(
-                1L, 10L, 100L, 200L, "adopter@kitti.es",
+                1L, 10L, 100L, 200L,
                 true, "abandoné a mi perro", 2, false, null,
                 false, null, 8, true, null,
                 "Apartment", 70, false, true, false,

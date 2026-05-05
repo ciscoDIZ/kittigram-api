@@ -58,7 +58,7 @@ class FormAnalysisServiceTest {
         InMemorySink<AdoptionFormAnalysedEvent> sink = connector.sink("adoption-form-analysed");
 
         var event = new AdoptionFormSubmittedEvent(
-                1L, 10L, 100L, 200L, "adopter@kitti.es",
+                1L, 10L, 100L, 200L,
                 true, "Murió de vejez", 2, false, null,
                 false, null, 8, true, null,
                 "Apartment", 70, false, false, null,
@@ -87,7 +87,7 @@ class FormAnalysisServiceTest {
         InMemorySink<AdoptionFormAnalysedEvent> sink = connector.sink("adoption-form-analysed");
 
         var event = new AdoptionFormSubmittedEvent(
-                2L, 10L, 100L, 200L, "adopter@kitti.es",
+                2L, 10L, 100L, 200L,
                 true, null, 2, false, null,
                 false, null, 8, true, null,
                 "Apartment", 70, false, false, null,
@@ -113,7 +113,7 @@ class FormAnalysisServiceTest {
         InMemorySink<AdoptionFormAnalysedEvent> sink = connector.sink("adoption-form-analysed");
 
         var event = new AdoptionFormSubmittedEvent(
-                3L, 10L, 100L, 200L, "adopter@kitti.es",
+                3L, 10L, 100L, 200L,
                 false, null, 2, false, null,
                 false, null, 8, true, null,
                 "Apartment", 70, false, false, null,
