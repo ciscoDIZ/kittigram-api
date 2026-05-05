@@ -188,7 +188,7 @@ Deben resolverse antes del lanzamiento a producción.
 Los mensajes Kafka persisten en disco según la retención del topic y no están cifrados a nivel de mensaje.
 **Solución:** Sustituir `adopterEmail` por `adoptionRequestId` en el evento. form-analysis-service no necesita el email para analizar el formulario.
 
-### I-2 — Email en el payload del JWT
+### I-2 — Email en el payload del JWT ✅ resuelto
 
 El claim `email` viaja en cada request y puede aparecer en logs del gateway, application server y trazas OTEL.
 **Solución:** Eliminar el claim `email` del JWT. Usar solo `sub` (userId). Los servicios que necesitan el email deben recuperarlo del user-service por `userId`.
@@ -245,7 +245,7 @@ En producción las imágenes se alojan en Cloudflare R2. Las imágenes de gatos 
 | C-3 | Derecho al olvido (borrado/anonimización) | user, adoption, auth, chat | alto | ✅ resuelto |
 | C-4 | Política de retención + jobs de purga | auth, adoption, chat | medio | ✅ resuelto |
 | I-1 | Quitar datos personales del evento Kafka | adoption, form-analysis | bajo | ✅ resuelto |
-| I-2 | Quitar email del JWT | auth + todos los consumidores | alto | 🟠 importante |
+| I-2 | Quitar email del JWT | auth + todos los consumidores | alto | ✅ resuelto |
 | I-3 | Quitar `adopter_email` de adoption_requests | adoption-service | medio | 🟠 importante |
 | I-4 | Job de purga de refresh tokens | auth-service | bajo | 🟠 importante |
 | I-5 | Endpoint de portabilidad de datos | user-service | medio | 🟠 importante |
