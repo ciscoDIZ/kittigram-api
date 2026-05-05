@@ -1,7 +1,6 @@
 package es.kitti.adoption.event;
 
 public record AdoptionFormSubmittedEvent(
-        String adopterEmail,
         Long adoptionRequestId,
         Long catId,
         Long adopterId,

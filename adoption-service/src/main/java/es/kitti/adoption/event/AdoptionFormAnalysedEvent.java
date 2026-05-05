@@ -4,7 +4,7 @@ public record AdoptionFormAnalysedEvent(
         Long adoptionRequestId,
         String decision,
         String rejectionReason,
-        String adopterEmail,
+        Long adopterId,
         int criticalFlags,
         int warningFlags,
         int noticeFlags

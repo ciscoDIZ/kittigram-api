@@ -280,7 +280,6 @@ public class AdoptionService {
     private AdoptionFormSubmittedEvent buildFormSubmittedEvent(
             AdoptionRequest adoption, AdoptionRequestForm form) {
         return new AdoptionFormSubmittedEvent(
-                adoption.adopterEmail,
                 adoption.id,
                 adoption.catId,
                 adoption.adopterId,
